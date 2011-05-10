@@ -19,7 +19,7 @@ using namespace std;
 // GLOBALS ////////////////////////////////////////////////////////////
 
 #define 		BG_COLOR 0.2, 0.2, 0.3
-#define 		OSD_LINES 1
+#define 		OSD_LINES 2
 			
 int				mainWindow;
 Object			object;
@@ -34,7 +34,7 @@ static bool     heldShift = false;
 
 long int		frameCounter, fps;
 char 			osd[OSD_LINES][256];
-float			cameraX=0, cameraY=0, cameraZ=100;
+Point3df		cameraPos;
 int				width=800, height=600;
 vector3f		cameraU, cameraV, cameraN;
 
@@ -52,6 +52,7 @@ char			fileName[256];
 
 void resetCamera( int nil=0 );
 void updateSettings( int nil=0 );
+void loadModel( int nil=0 );
 
 // PROGRAM /////////////////////////////////////////////////////////////
 
@@ -71,19 +72,19 @@ void drawObjects()
 
 void lights()
 {			
-	GLfloat pos[] = { 0 , 100 , 0 , 1.0f };
+	GLfloat pos[] = { 0 , 200 , 0 , 1.0f };
 	glLightfv(GL_LIGHT0, GL_POSITION, pos);
 	
 	static float posIter = 0;
-	GLfloat pos2[] = { (float)sin(posIter)*150 , 0 , (float)cos(posIter)*100 , 1.0f };
+	GLfloat pos2[] = { (float)sin(posIter)*300 , 100 , (float)cos(posIter)*150 , 1.0f };
 	glLightfv(GL_LIGHT1, GL_POSITION, pos2);
 	posIter += 0.01;
 }
 
 void camera()
 {
-	gluLookAt( 	cameraX, cameraY, cameraZ,
-				cameraX+cameraN.x, cameraY+cameraN.y, cameraZ+cameraN.z,
+	gluLookAt( 	cameraPos.x, cameraPos.y, cameraPos.z,
+				cameraPos.x+cameraN.x, cameraPos.y+cameraN.y, cameraPos.z+cameraN.z,
 				cameraV.x, cameraV.y, cameraV.z);
 }
 
@@ -91,18 +92,17 @@ void drawOsd()
 /* Draws On-Screen Display */
 /* Adapted from http://www.opengl.org/resources/code/samples/glut_examples/examples/bitfont.c */
 {
-	float y = 0.5;
-	
 	glDisable(GL_LIGHTING);
 
 		glColor3f(1.,1.,1.);
-		for( int line=0; line<OSD_LINES; line++ ) {
-			
-			glRasterPos3f(-1,y,-1);
-			for( int ch = 0; ch < (int)strlen(osd[line]); ch++) 
-				glutBitmapCharacter(GLUT_BITMAP_HELVETICA_18, osd[line][ch]);
-			y-=0.05;
-		}
+
+		glRasterPos3f(-1.3,0.9,-1);
+		for( int ch = 0; ch < (int)strlen(osd[0]); ch++) 
+			glutBitmapCharacter(GLUT_BITMAP_HELVETICA_18, osd[0][ch]);
+
+		glRasterPos3f(-1.3,0.9-0.08,-1);
+		for( int ch = 0; ch < (int)strlen(fileName); ch++) 
+			glutBitmapCharacter(GLUT_BITMAP_HELVETICA_18, fileName[ch]);
    
 	enableLight ? glEnable(GL_LIGHTING) : glDisable(GL_LIGHTING);
 }
@@ -111,7 +111,6 @@ void reshape(int w, int h)
 {
 	width = w;
 	height = h;
-	resetCamera();
 }
 
 void display () {
@@ -142,8 +141,8 @@ void display () {
 
 void initWorld()
 {
-	object = Object("data/cow.in");
-	object.size = {0.1,0.1,0.1};
+	sprintf(fileName,"data/cow.in");
+	loadModel();
 }
 
 void loadModel( int nil )
@@ -161,13 +160,9 @@ void initLights () {
 	{
 		// fixed light
 		GLfloat ambientLight[] = { 0.0, 0.0, 0.0, 1.0f };
-		GLfloat diffuseLight[] = { 0.5f, 0.5f, 0.5f, 1.0f };
-		GLfloat specularLight[] = { 0.8f, 0.8f, 0.8f, 1.0f };
+		GLfloat diffuseLight[] = { 0.8f, 0.8f, 0.8f, 1.0f };
 		glLightfv(GL_LIGHT0, GL_AMBIENT, ambientLight);
 		glLightfv(GL_LIGHT0, GL_DIFFUSE, diffuseLight);
-		glLightfv(GL_LIGHT0, GL_SPECULAR, specularLight);
-		glLightf(GL_LIGHT0, GL_CONSTANT_ATTENUATION, 0.5);
-		glLightf(GL_LIGHT0, GL_LINEAR_ATTENUATION, 0.003);
 	}
 	
 	{
@@ -178,7 +173,7 @@ void initLights () {
 		glLightfv(GL_LIGHT1, GL_AMBIENT, ambientLight);
 		glLightfv(GL_LIGHT1, GL_DIFFUSE, diffuseLight);
 		glLightfv(GL_LIGHT1, GL_SPECULAR, specularLight);
-		glLightf(GL_LIGHT1, GL_CONSTANT_ATTENUATION, 0.5);
+		glLightf(GL_LIGHT1, GL_CONSTANT_ATTENUATION, 0.2);
 		glLightf(GL_LIGHT1, GL_LINEAR_ATTENUATION, 0.001);
 	}
 }
@@ -220,12 +215,12 @@ void specialFunc(int key, int x, int y)
 	
 	if( key == GLUT_KEY_RIGHT || key == GLUT_KEY_LEFT )
 	{
-		cameraX += var*cameraU.x;
-		cameraY += var*cameraU.y;
-		cameraZ += var*cameraU.z;
+		cameraPos.x += var*cameraU.x;
+		cameraPos.y += var*cameraU.y;
+		cameraPos.z += var*cameraU.z;
 		
 		if(cameraMoveOpt==1) {
-			float d = sqrt( pow(object.centerPoint.x-cameraX,2) + pow(object.centerPoint.z-cameraZ,2) );
+			float d = sqrt( pow(object.centerPoint.x-cameraPos.x,2) + pow(object.centerPoint.z-cameraPos.z,2) );
 			float theta = asin(var/d);
 			theta = theta*180/M_PI;
 			
@@ -236,12 +231,12 @@ void specialFunc(int key, int x, int y)
 		}
 	}
 	else if( key == GLUT_KEY_DOWN || key == GLUT_KEY_UP ) {
-		cameraX += var*cameraV.x;
-		cameraY += var*cameraV.y;
-		cameraZ += var*cameraV.z;
+		cameraPos.x += var*cameraV.x;
+		cameraPos.y += var*cameraV.y;
+		cameraPos.z += var*cameraV.z;
 		
 		if(cameraMoveOpt==1) {
-			float d = sqrt( pow(object.centerPoint.y-cameraY,2) + pow(object.centerPoint.z-cameraZ,2) );
+			float d = sqrt( pow(object.centerPoint.y-cameraPos.y,2) + pow(object.centerPoint.z-cameraPos.z,2) );
 			float theta = asin(var/d);
 			theta = theta*180/M_PI;
 			
@@ -275,9 +270,9 @@ void mouseFunc(int button, int state, int x, int y) {
 		var = -var;
 	}
 	if( button == GLUT_WHEEL_DOWN || button == GLUT_WHEEL_UP ) {
-		cameraX += var*cameraN.x;
-		cameraY += var*cameraN.y;
-		cameraZ += var*cameraN.z;
+		cameraPos.x += var*cameraN.x;
+		cameraPos.y += var*cameraN.y;
+		cameraPos.z += var*cameraN.z;
 	}
 		
 	xold = x;
@@ -342,23 +337,23 @@ void resetCamera( int nil )
 	cameraV={0,1,0};
 	cameraN={0,0,-1};
 	
-	cameraX = object.centerPoint.x*object.size[0] + object.pos[0];
-	cameraY = object.centerPoint.y*object.size[1] + object.pos[1];	
+	cameraPos.x = object.centerPoint.x*object.size[0] + object.pos[0];
+	cameraPos.y = object.centerPoint.y*object.size[1] + object.pos[1];	
 	
 	double z, z1, z2;
 	
 	z1 = ( (object.maxPoint.y-object.minPoint.y)*object.size[1] + object.pos[1])
-				 / 2.*tan(fovy*M_PI/360.);
+			/ 2.*tan(fovy*M_PI/360.);
 	
 	double fovx = 2*atan( tan(fovy*M_PI/360.)*height/(double)width );
 	
 	z2 = ( (object.maxPoint.x-object.minPoint.x)*object.size[0] + object.pos[0])
-				 / 2.*tan(fovx/2.);
+			/ 2.*tan(fovx/2.);
 	
 	z = z1>z2 ? z1 : z2;
 	
-	cameraZ = z + object.maxPoint.z*object.size[2] + object.pos[2];	
-}
+	cameraPos.z = z + object.maxPoint.z*object.size[2] + object.pos[2];	
+}	
 
 void updateSettings( int nil )
 {
@@ -390,39 +385,36 @@ void createGuiWindow()
 {
 	GLUI *glui = GLUI_Master.create_glui("GUI");
 
-	GLUI_Panel *lm = glui->add_panel("");
-		glui->add_edittext_to_panel( lm, "Object file:", GLUI_EDITTEXT_TEXT, fileName );
-		glui->add_button_to_panel( lm, "Load", 0, loadModel );
-	
-	GLUI_Panel *op = glui->add_panel("OpenGL");
-		GLUI_Listbox *orientations = glui->add_listbox_to_panel(op, "V. Orientation: ", &orientationOpt, 0, updateSettings);
-			orientations->add_item( 0, "CW");
-			orientations->add_item( 1, "CCW");
-		GLUI_Listbox *shadings = glui->add_listbox_to_panel(op, "Shading: ", &shadeOpt, 0, updateSettings);
-			shadings->add_item( 0, "Smooth");
-			shadings->add_item( 1, "Flat");
-		glui->add_checkbox_to_panel( op, "Enable Backface Culling", &enableCulling, 0, updateSettings );
-		glui->add_checkbox_to_panel( op, "Draw Normals", &enableDrawNormals );
-		glui->add_checkbox_to_panel( op, "Draw Bounding Box", &enableDrawBoundingBox );
-		
-	GLUI_Panel *lp = glui->add_panel("Light");
+	GLUI_Panel *lp = glui->add_panel("World");
 		glui->add_checkbox_to_panel( lp, "Enable Lighting", &enableLight, 0, updateSettings );
 		glui->add_checkbox_to_panel( lp, "Enable LIGHT0", &enableFixedLight, 0, updateSettings );
 		glui->add_checkbox_to_panel( lp, "Enable LIGHT1", &enableRotLight, 0, updateSettings );
 	
 	GLUI_Panel *mp = glui->add_panel("Model");
+		GLUI_Panel *mpm = glui->add_panel_to_panel(mp,"");
+			glui->add_edittext_to_panel( mpm, "File name:", GLUI_EDITTEXT_TEXT, fileName );
+			glui->add_button_to_panel( mpm, "Load", 0, loadModel );
+		GLUI_Listbox *orientations = glui->add_listbox_to_panel(mp, "V. Orientation: ", &orientationOpt, 0, updateSettings);
+			orientations->add_item( 0, "CW");
+			orientations->add_item( 1, "CCW");
+		GLUI_Listbox *shadings = glui->add_listbox_to_panel(mp, "Shading: ", &shadeOpt, 0, updateSettings);
+			shadings->add_item( 0, "Smooth");
+			shadings->add_item( 1, "Flat");
 		GLUI_Listbox *models = glui->add_listbox_to_panel(mp,"Drawing Mode: ", &drawOpt, 0, updateSettings);
 			models->add_item( 0, "Filled");
 			models->add_item( 1, "Wireframe");
 			models->add_item( 2, "Vertex");
-		glui->add_checkbox_to_panel( mp, "Enable Color", &enableColoredDraw );
-		
-		GLUI_Spinner *rSpin = glui->add_spinner_to_panel( mp, "R:", GLUI_SPINNER_FLOAT, &forceColor.x );
-			rSpin->set_float_limits( 0., 1., GLUI_LIMIT_CLAMP );
-		GLUI_Spinner *gSpin = glui->add_spinner_to_panel( mp, "G:", GLUI_SPINNER_FLOAT, &forceColor.y );
-			gSpin->set_float_limits( 0., 1., GLUI_LIMIT_CLAMP );
-		GLUI_Spinner *bSpin = glui->add_spinner_to_panel( mp, "B:", GLUI_SPINNER_FLOAT, &forceColor.z );
-			bSpin->set_float_limits( 0., 1., GLUI_LIMIT_CLAMP );
+		glui->add_checkbox_to_panel( mp, "Enable Backface Culling", &enableCulling, 0, updateSettings );
+		glui->add_checkbox_to_panel( mp, "Draw Normals", &enableDrawNormals );
+		glui->add_checkbox_to_panel( mp, "Draw Bounding Box", &enableDrawBoundingBox );
+			GLUI_Panel *mpc = glui->add_panel_to_panel(mp,"Coloring");
+				glui->add_checkbox_to_panel( mpc, "Enable", &enableColoredDraw );
+				GLUI_Spinner *rSpin = glui->add_spinner_to_panel( mpc, "R:", GLUI_SPINNER_FLOAT, &forceColor.x );
+					rSpin->set_float_limits( 0., 1., GLUI_LIMIT_CLAMP );
+				GLUI_Spinner *gSpin = glui->add_spinner_to_panel( mpc, "G:", GLUI_SPINNER_FLOAT, &forceColor.y );
+					gSpin->set_float_limits( 0., 1., GLUI_LIMIT_CLAMP );
+				GLUI_Spinner *bSpin = glui->add_spinner_to_panel( mpc, "B:", GLUI_SPINNER_FLOAT, &forceColor.z );
+					bSpin->set_float_limits( 0., 1., GLUI_LIMIT_CLAMP );
 	
 	//glui->add_column(false);
 

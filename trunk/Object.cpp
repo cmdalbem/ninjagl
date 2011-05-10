@@ -189,18 +189,18 @@ void Object::draw( bool isColored ) const
 	drawBegin();
 	
 		glBegin(GL_TRIANGLES);
+		if(isColored)
+			glColor3f( forceColor.x,forceColor.y,forceColor.z );
 		for(unsigned int i=0; i<tris.size(); i++) {
 			for(int k=0; k<3; k++) {
-				if(isColored)
-					glColor3f( forceColor.x,forceColor.y,forceColor.z );
-				else
+				if(!isColored)
 					glColor3f( tris[i].v[k].color[0],
 								tris[i].v[k].color[1],
 								tris[i].v[k].color[2]);
 				glNormal3f(tris[i].v[k].normal.x, tris[i].v[k].normal.y, tris[i].v[k].normal.z);
 				glVertex3f(tris[i].v[k].pos.x, tris[i].v[k].pos.y, tris[i].v[k].pos.z);
 			}
-		}
+}
 		glEnd();
 	
 	drawEnd();

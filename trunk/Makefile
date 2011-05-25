@@ -2,21 +2,26 @@ CC = g++
 
 FLAGS = -Wall -std=c++0x
 
-OBJS = Object.o Material.o vector3f.o vector4f.o
-OBJLIB =
+OBJDIR = obj
+OBJNAMES = Object.o Material.o vector3f.o vector4f.o
+OBJS = $(addprefix $(OBJDIR)/,$(OBJNAMES))
 
 LIBS = -lGL -lglut -lGLU -lglui
 
 BIN = main
 
-%.o: %.cpp %.h
-	$(CC) $(FLAGS) -c $< -o $@ $(FLAGS) $(LIBS) 
-
-
-all: main.cpp $(OBJS) $(OBJLIB)
+all: main.cpp $(OBJS)
 	$(CC) $(FLAGS) $^ -o $(BIN) $(FLAGS) $(LIBS) 
 
+$(OBJDIR)/%.o: %.cpp %.h | $(OBJDIR)
+	$(CC) $(FLAGS) -c $< -o $@ $(FLAGS) $(LIBS) 
 
+$(OBJDIR):
+	mkdir $(OBJDIR) -p
+
+
+.PHONY: clean
 clean:
 	rm -f $(BIN)
 	rm -f *.o
+	rm -f $(OBJDIR)

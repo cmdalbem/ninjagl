@@ -200,7 +200,7 @@ void Object::draw( bool isColored ) const
 				glNormal3f(tris[i].v[k].normal.x, tris[i].v[k].normal.y, tris[i].v[k].normal.z);
 				glVertex3f(tris[i].v[k].pos.x, tris[i].v[k].pos.y, tris[i].v[k].pos.z);
 			}
-}
+		}
 		glEnd();
 	
 	drawEnd();

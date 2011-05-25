@@ -10,6 +10,7 @@
 #define _MATRIX4X4F_H_
 
 #include "vector3f.h"
+#include "vector4f.h"
 
 #define DEGTORAD(degree) ((degree) * (3.141592654f / 180.0f))
 #define RADTODEG(radian) ((radian) * (180.0f / 3.141592654f))
@@ -32,6 +33,7 @@ public:
     void rotate(float angle, vector3f axis);
 
     void transformVector( vector3f *vec );
+    void transformVector( vector4f *vec );
 };
 
 matrix4x4f::matrix4x4f( float m0, float m4, float  m8, float m12,
@@ -104,6 +106,36 @@ void matrix4x4f::transformVector( vector3f *vec )
     v.z = x * m[2] +
           y * m[6] +
           z * m[10];
+}
+
+void matrix4x4f::transformVector( vector4f *vec )
+{
+    vector4f &v = *vec;
+
+    float x = v.x;
+    float y = v.y;
+    float z = v.z;
+    float w = v.w;
+
+    v.x = x * m[0] +
+          y * m[4] +
+          z * m[8] +
+          w * m[12];
+
+    v.y = x * m[1] +
+          y * m[5] +
+          z * m[9] +
+          w * m[13];
+
+    v.z = x * m[2] +
+          y * m[6] +
+          z * m[10] +
+          w * m[14];
+          
+    v.w = x * m[3] +
+          y * m[7] +
+          z * m[11] +
+          w * m[15];
 }
 
 #endif // _MATRIX4X4F_H_

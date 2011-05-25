@@ -83,21 +83,21 @@ void vector3f::normalize( void )
 
 // Static utility methods...
 
-static float distance( const vector3f &v1,  const vector3f &v2  )
+/*static float distance( const vector3f &v1,  const vector3f &v2  )
 {
     float dx = v1.x - v2.x;
     float dy = v1.y - v2.y;
     float dz = v1.z - v2.z;
 
     return (float)sqrt( dx * dx + dy * dy + dz * dz );
-}
+}*/
 
 static float dotProduct( const vector3f &v1,  const vector3f &v2 )
 {
     return( v1.x * v2.x + v1.y * v2.y + v1.z * v2.z  );
 }
 
-static vector3f crossProduct( const vector3f &v1,  const vector3f &v2 )
+/*static vector3f crossProduct( const vector3f &v1,  const vector3f &v2 )
 {
     vector3f vCrossProduct;
 
@@ -106,7 +106,7 @@ static vector3f crossProduct( const vector3f &v1,  const vector3f &v2 )
     vCrossProduct.z =  v1.x * v2.y - v1.y * v2.x;
 
     return vCrossProduct;
-}
+}*/
 
 // Operators...
 

@@ -20,23 +20,21 @@ using namespace std;
 
 #define 		BG_COLOR 0.2, 0.2, 0.3
 #define 		OSD_LINES 2
+#define			WINDOWSX 50
+#define			WINDOWSY 200
 			
-int				mainWindow;
+int				mainWindow, ninjaWindow;
 Object			object;
 
 // Mouse-Keyboard
 static int      xold, yold;		
-static int	    left_click = GLUT_UP;
-static int	    right_click = GLUT_UP;
-static int	    middle_click = GLUT_UP;
-static bool     heldCtrl = false;
-static bool     heldShift = false;
+static int	    left_click=GLUT_UP, right_click=GLUT_UP, middle_click=GLUT_UP;
+static bool     heldCtrl=false, heldShift=false;
 
-long int		frameCounter, fps;
-char 			osd[OSD_LINES][256];
-Point3df		cameraPos;
+long int		frameCounter, frameCounter2, fps, fps2;
+char 			osd[OSD_LINES][256], osd2[OSD_LINES][256];
 int				width=800, height=600;
-vector3f		cameraU, cameraV, cameraN;
+vector3f		cameraPos, cameraU, cameraV, cameraN;
 
 // GUI controlled
 float			fovy=90, clipNear=0.1, clipFar=1000;
@@ -54,7 +52,8 @@ void resetCamera( int nil=0 );
 void updateSettings( int nil=0 );
 void loadModel( int nil=0 );
 
-// PROGRAM /////////////////////////////////////////////////////////////
+
+// OPENGL //////////////////////////////////////////////////////////////
 
 void drawObjects()
 {
@@ -107,25 +106,26 @@ void drawOsd()
 	enableLight ? glEnable(GL_LIGHTING) : glDisable(GL_LIGHTING);
 }
 
-void reshape(int w, int h)
-{
+void reshape(int w, int h) {
 	width = w;
 	height = h;
-}
-
-void display () {
-	
-	glutSetWindow(mainWindow);
-	
-	glClear( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT );
 	
 	glViewport(0, 0, (GLsizei) width, (GLsizei) height);
 	
 	glMatrixMode(GL_PROJECTION);
 	glLoadIdentity();
 	gluPerspective (fovy, (GLfloat)width / (GLfloat)height, clipNear, clipFar);
-	  
-    glMatrixMode(GL_MODELVIEW);
+	
+	glMatrixMode(GL_MODELVIEW);
+}
+
+void display () {
+// The Original Display Function
+	
+	glutSetWindow(mainWindow);
+	
+	glClear( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT );
+	
     glLoadIdentity ();
     
 		drawOsd();
@@ -134,10 +134,84 @@ void display () {
 		drawObjects();
 	
 	glutSwapBuffers();
-
-	frameCounter++;
 	glutPostRedisplay();
+	frameCounter++;
 }
+
+
+// NINJAGL /////////////////////////////////////////////////////////////
+
+matrix4x4f modelviewMatrix, projectionMatrix, viewportMatrix;
+
+
+void updateModelviewMatrix()
+{
+	matrix4x4f *m = &modelviewMatrix;
+	
+	m->m[0]=cameraU.x;	m->m[4]=cameraU.y;	m->m[8]=cameraU.z;	m->m[12]=-dotProduct(cameraPos,cameraU);
+    m->m[1]=cameraV.x;	m->m[5]=cameraV.y;	m->m[9]=cameraV.z;	m->m[13]=-dotProduct(cameraPos,cameraV);
+    m->m[2]=cameraN.x;	m->m[6]=cameraN.y;	m->m[10]=cameraN.z;	m->m[14]=-dotProduct(cameraPos,cameraN);
+    m->m[3]=0; 			m->m[7]=0; 			m->m[11]=0;			m->m[15]=1;	
+}
+
+void updateProjectionMatrix()
+{
+	float t, b, l, r;
+	float n = clipNear,
+		  f = clipFar;
+	
+	matrix4x4f *m = &projectionMatrix;
+	
+	m->m[0]=2*n/(r-l);	m->m[4]=0;			m->m[8]=(r+l)/(r-l);	m->m[12]=0;
+    m->m[1]=0;			m->m[5]=2*n/(t-b);	m->m[9]=(t+b)/(t-b);	m->m[13]=0;
+    m->m[2]=0;			m->m[6]=0;			m->m[10]=-(f+n)/(f-n);	m->m[14]=-(2*f*n)/(f-n);
+    m->m[3]=0; 			m->m[7]=0; 			m->m[11]=-1;			m->m[15]=0;
+	
+}
+
+void updateViewportMatrix()
+{
+	
+	
+	
+}
+
+void reshape2(int w, int h) {
+	width = w;
+	height = h;
+	
+	glViewport(0, 0, (GLsizei) w, (GLsizei) h);
+	
+	glMatrixMode(GL_PROJECTION);
+	glLoadIdentity();
+	gluOrtho2D(0.0, 1.0, 0.0, 1.0);
+	
+	glMatrixMode(GL_MODELVIEW);
+	
+	updateProjectionMatrix();
+	
+	updateViewportMatrix();
+}
+
+void display2 () {
+// The NinjaGL Display Function
+	
+	glutSetWindow(ninjaWindow);
+	
+	glClear( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT );
+	
+		//drawOsd();
+		//camera();
+		//lights();
+		//drawObjects();
+	
+	glutSwapBuffers();
+	glutPostRedisplay();
+	frameCounter2++;
+}
+
+
+// PROGRAM /////////////////////////////////////////////////////////////
 
 void initWorld()
 {
@@ -188,11 +262,8 @@ void initGL()
     glEnable(GL_COLOR_MATERIAL);
 
 	updateSettings();
-
-	initLights();
 }
 
-//--------------------------- KEYBOARD ---------------------------//
 void keyboardFunc (unsigned char key, int x, int y) {
 			
     if ( key=='r' )
@@ -249,16 +320,12 @@ void specialFunc(int key, int x, int y)
 	
 }
 
-//--------------------------- MOUSE ---------------------------//
 void mouseFunc(int button, int state, int x, int y) {
-/* This function only updates click states and positions */
  
 	heldCtrl = (glutGetModifiers() == GLUT_ACTIVE_CTRL);
 	heldShift = (glutGetModifiers() == GLUT_ACTIVE_SHIFT);
  	
- 	int var = 10;
-	if(heldShift)
-		var = 3;
+	int var = heldShift ? 3 : 10;
 		
 	if( button == GLUT_LEFT_BUTTON )
 		left_click = state;
@@ -282,10 +349,7 @@ void mouseFunc(int button, int state, int x, int y) {
 void mouseMotionFunc(int x, int y) {
 	
 	double sf;
-	if(heldShift)
-		sf = 20.;
-	else
-		sf = 5.;
+	sf = heldShift ? 20. : 5.;
 	
 	float varX = -(x-xold)/5.;
 	float varY = -(y-yold)/5.;
@@ -331,6 +395,15 @@ void updateFPS(int value) {
 	glutTimerFunc(1000/*1sec*/, updateFPS, 0);
 }
 
+void updateFPS2(int value) {
+	fps2 = frameCounter2;
+	frameCounter2 = 0;
+	
+	sprintf(osd2[0],"FPS: %li ",fps2);
+	
+	glutTimerFunc(1000/*1sec*/, updateFPS2, 0);
+}
+
 void resetCamera( int nil )
 {
 	cameraU={1,0,0};
@@ -342,14 +415,18 @@ void resetCamera( int nil )
 	
 	double z, z1, z2;
 	
+	//get the optimal z acording to Y dimensions (height) of the object
 	z1 = ( (object.maxPoint.y-object.minPoint.y)*object.size[1] + object.pos[1])
 			/ 2.*tan(fovy*M_PI/360.);
 	
+	//calculate fovx based on fovy
 	double fovx = 2*atan( tan(fovy*M_PI/360.)*height/(double)width );
 	
+	//get the optimal z acording to X dimensions (width) of the object
 	z2 = ( (object.maxPoint.x-object.minPoint.x)*object.size[0] + object.pos[0])
 			/ 2.*tan(fovx/2.);
 	
+	//decide which z to take
 	z = z1>z2 ? z1 : z2;
 	
 	cameraPos.z = z + object.maxPoint.z*object.size[2] + object.pos[2];	
@@ -383,7 +460,7 @@ void updateSettings( int nil )
 
 void createGuiWindow()
 {
-	GLUI *glui = GLUI_Master.create_glui("GUI");
+	GLUI *glui = GLUI_Master.create_glui("GUI",0,WINDOWSX+width,WINDOWSY);
 
 	GLUI_Panel *lp = glui->add_panel("World");
 		glui->add_checkbox_to_panel( lp, "Enable Lighting", &enableLight, 0, updateSettings );
@@ -432,27 +509,50 @@ void createGuiWindow()
 	glui->set_main_gfx_window( mainWindow );
 }
 
+
 int main (int argc, char **argv) {
     cout << "Initializing...\n";
+    
+    // OpenGL Window
     glutInit (&argc, argv);
-    glutInitDisplayMode ( GLUT_DOUBLE | GLUT_DEPTH ); //set the display to Double buffer, with depth buffer
-    
+    glutInitDisplayMode ( GLUT_DOUBLE | GLUT_RGB | GLUT_DEPTH );
 	glutInitWindowSize (width, height);
-	mainWindow = glutCreateWindow ("CloseToGL");
-	createGuiWindow();
+	glutInitWindowPosition(WINDOWSX,WINDOWSY);
+	mainWindow = glutCreateWindow ("OpenGL");
 	
-    initGL();
-    initWorld();
-    
     glutDisplayFunc (display);
     glutReshapeFunc(reshape);
     GLUI_Master.set_glutIdleFunc (display);
-    glutTimerFunc(1000/*1sec*/, updateFPS, 0);
     
     glutKeyboardFunc(keyboardFunc);
     glutSpecialFunc(specialFunc);
     glutMouseFunc(mouseFunc);
 	glutMotionFunc(mouseMotionFunc);
+	
+	initGL();
+	initLights();
+	glutTimerFunc(1000/*1sec*/, updateFPS, 0);
+	
+	// Close2GL Window
+	glutInitWindowPosition(WINDOWSX+width+210,WINDOWSY);
+	ninjaWindow = glutCreateWindow ("NinjaGL");
+	
+    glutDisplayFunc(display2);
+    glutReshapeFunc(reshape2);
+    GLUI_Master.set_glutIdleFunc(display2);
+    
+    glutKeyboardFunc(keyboardFunc);
+    glutSpecialFunc(specialFunc);
+    glutMouseFunc(mouseFunc);
+	glutMotionFunc(mouseMotionFunc);
+	
+	initGL();
+	glutTimerFunc(1000/*1sec*/, updateFPS2, 0);
+	
+	// More inits
+    initWorld();
+	
+	createGuiWindow();
 	
     glutMainLoop();     
     

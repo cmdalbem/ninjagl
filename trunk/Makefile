@@ -2,7 +2,7 @@ CC = g++
 
 FLAGS = -Wall -std=c++0x
 
-OBJS = Object.o Material.o
+OBJS = Object.o Material.o vector3f.o vector4f.o
 OBJLIB =
 
 LIBS = -lGL -lglut -lGLU -lglui

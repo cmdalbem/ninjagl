@@ -12,6 +12,7 @@
 #include <GL/glut.h>
 
 #include "Material.h"
+#include "constants.h"
 
 using namespace std;
 
@@ -25,10 +26,10 @@ class Object
 				size[3];	// scale arguments on Scalefs functions called on Draw
 			
 		vector<Material>	materials;
-		vector<Triangle>	tris;
-		Point3df			forceColor;
+		vector<Triangle3f>	tris;
+		vector3f			forceColor;
 		
-		Point3df			maxPoint, minPoint, centerPoint;
+		vector3f			maxPoint, minPoint, centerPoint;
 
 		//---------------------------- CONSTRUCTORS
 		Object();

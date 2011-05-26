@@ -146,7 +146,7 @@ void matrix4x4f::print()
 {
 	for(int k=0; k<4; k++) {
 		for(int i=0; i<4; i++)
-			printf("%.2f\t",m[k + i*4]);
+			printf("%.3f\t\t",m[k + i*4]);
 		printf("\n");
 	}
 	printf("\n");
@@ -158,21 +158,10 @@ matrix4x4f matrix4x4f::operator * ( const matrix4x4f &other )
 
 	#define pos(x,y) (x + y*4)
 
-    for(int y=0; y<4; y++) {
+    for(int y=0; y<4; y++)
 		for(int x=0; x<4; x++)
-			for(int k=0; k<4; k++) {
+			for(int k=0; k<4; k++)
 				mult.m[pos(x,y)] += this->m[pos(k,y)] * other.m[pos(x,k)];
-				//printf("%.2f*%.2f + ",this->m[pos(k,y)], other.m[pos(x,k)]);
-			}
-		//printf("\n");
-	}
-
-	/*
-	float m0, float m4, float  m8, float m12,
-    float m1, float m5, float  m9, float m13,
-    float m2, float m6, float m10, float m14,
-	float m3, float m7, float m11, float m15
-	*/
 
     return mult;
 }

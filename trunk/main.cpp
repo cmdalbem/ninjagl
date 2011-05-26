@@ -20,8 +20,8 @@ using namespace std;
 
 #define 		BG_COLOR 0.2, 0.2, 0.3
 #define 		OSD_LINES 2
-#define			WINDOWSX 50
-#define			WINDOWSY 400
+#define			WINDOWSX 100
+#define			WINDOWSY 300
 			
 int				mainWindow, ninjaWindow;
 Object			object;
@@ -34,15 +34,15 @@ static bool     heldCtrl=false, heldShift=false;
 
 long int		frameCounter, frameCounter2, fps, fps2;
 char 			osd[OSD_LINES][256], osd2[OSD_LINES][256];
-int				width=800, height=600;
+int				width=620, height=620;
 vector3f		cameraPos, cameraU, cameraV, cameraN;
 
 // GUI controlled
-float			fovy=90, clipNear=0.1, clipFar=1000;
-int				drawOpt, cameraMoveOpt, orientationOpt, shadeOpt;
+float			fovy=90, fovx=90, clipNear=0.1, clipFar=3000;
+int				drawOpt=1, cameraMoveOpt, orientationOpt, shadeOpt;
 int				enableFixedLight=1, enableRotLight=1, enableCulling=1, 
 				enableDrawNormals=0, enableDrawBoundingBox=0, enableColoredDraw=0,
-				enableLight=1;
+				enableLight=0;
 vector3f		forceColor={1,1,1};
 char			fileName[256];
 
@@ -52,7 +52,6 @@ char			fileName[256];
 void resetCamera( int nil=0 );
 void updateSettings( int nil=0 );
 void loadModel( int nil=0 );
-double getFovx();
 
 
 // OPENGL //////////////////////////////////////////////////////////////
@@ -109,6 +108,9 @@ void drawOsd()
 }
 
 void reshape(int w, int h) {
+	
+	glutSetWindow(mainWindow);
+	
 	width = w;
 	height = h;
 	
@@ -116,7 +118,7 @@ void reshape(int w, int h) {
 	
 	glMatrixMode(GL_PROJECTION);
 	glLoadIdentity();
-	gluPerspective (fovy, (GLfloat)width / (GLfloat)height, clipNear, clipFar);
+	gluPerspective (fovy, tan(fovx*M_PI/360)/tan(fovy*M_PI/360), clipNear, clipFar);
 	
 	glMatrixMode(GL_MODELVIEW);
 }
@@ -151,7 +153,7 @@ void updateModelviewMatrix()
 	matrix4x4f *m = &modelviewMatrix;
 	m->m[0]=cameraU.x;	m->m[4]=cameraU.y;	m->m[8]=cameraU.z;	m->m[12]=-dotProduct(cameraPos,cameraU);
     m->m[1]=cameraV.x;	m->m[5]=cameraV.y;	m->m[9]=cameraV.z;	m->m[13]=-dotProduct(cameraPos,cameraV);
-    m->m[2]=cameraN.x;	m->m[6]=cameraN.y;	m->m[10]=cameraN.z;	m->m[14]=-dotProduct(cameraPos,cameraN);
+    m->m[2]=-cameraN.x;	m->m[6]=-cameraN.y;	m->m[10]=-cameraN.z;	m->m[14]=dotProduct(cameraPos,cameraN);
     m->m[3]=0; 			m->m[7]=0; 			m->m[11]=0;			m->m[15]=1;	
 }
 
@@ -160,8 +162,6 @@ void updateProjectionMatrix()
 	float n = clipNear,
 		  f = clipFar;
 
-	double fovx = getFovx();
-	
 	float r = n * tan(fovx*M_PI/360.);
 	float l = -r;
 	
@@ -186,6 +186,9 @@ void updateViewportMatrix( double lv, double rv, double bv, double tv )
 }
 
 void reshape2(int w, int h) {
+	
+	glutSetWindow(ninjaWindow);
+	
 	width = w;
 	height = h;
 	
@@ -202,19 +205,26 @@ void reshape2(int w, int h) {
 	updateViewportMatrix(0., 1., 0., 1.);
 }
 
-void drawObject2d()
+void drawTriangles2d( vector<Triangle4f> tris )
 {
 	bool isColored = enableColoredDraw;
 
+	switch(drawOpt) {
+		case 0:	glPolygonMode( GL_FRONT_AND_BACK, GL_FILL ); break;
+		case 1:	glPolygonMode( GL_FRONT_AND_BACK, GL_LINE ); break;
+		case 2:	glPolygonMode( GL_FRONT_AND_BACK, GL_POINT ); break;
+	}
+
+	glBegin(GL_TRIANGLES);
 	if(isColored)
 		glColor3f( forceColor.x,forceColor.y,forceColor.z );
-	for(unsigned int i=0; i<objTris.size(); i++) {
+	for(unsigned int i=0; i<tris.size(); i++) {
 		for(int k=0; k<3; k++) {
 			if(!isColored)
-				glColor3f( objTris[i].v[k].color[0],
-							objTris[i].v[k].color[1],
-							objTris[i].v[k].color[2]);
-			glVertex2f(objTris[i].v[k].pos.x, objTris[i].v[k].pos.y);
+				glColor3f( tris[i].v[k].color[0],
+							tris[i].v[k].color[1],
+							tris[i].v[k].color[2]);
+			glVertex2f(tris[i].v[k].pos.x, tris[i].v[k].pos.y);
 		}
 	}
 	glEnd();
@@ -228,46 +238,85 @@ void display2 () {
 	
 	// updates the Model/View Matrix with actual camera settings
 	updateModelviewMatrix();
-	
+		
 	// compute P*M
 	matrix4x4f pm = projectionMatrix * modelviewMatrix;
 	
+	/*cout << "M:" << endl;
+	modelviewMatrix.print();
 	cout << "P:" << endl;
 	projectionMatrix.print();
-	cout << "M:" << endl;
-	modelviewMatrix.print();
 	cout << "PM:" << endl;
-	pm.print();	
+	pm.print();*/
 	
 		vector<Triangle4f> tris = objTris;
 		
 		// Projects from WCS to View Volume
 		for(unsigned int i=0; i<tris.size(); i++)
 			for(unsigned int vi=0; vi<3; vi++) {
-				pm.transformVector( &tris[i].v[vi].pos );
-				//printf("%.1f\t%.1f\t%.1f\t%.1f\n",tris[i].v[vi].pos.x,tris[i].v[vi].pos.y,tris[i].v[vi].pos.z,tris[i].v[vi].pos.w);
+				//pm.transformVector( &tris[i].v[vi].pos );
+				modelviewMatrix.transformVector( &tris[i].v[vi].pos );
+				projectionMatrix.transformVector( &tris[i].v[vi].pos );
+				
+				//printf("v%i:\t%.3f\t%.3f\t%.3f\t%.3f\n",vi, tris[i].v[vi].pos.x,tris[i].v[vi].pos.y,tris[i].v[vi].pos.z-cameraPos.z,tris[i].v[vi].pos.w);
 			}
 
-		// Do clipping and culling
-		//...
+		// Do clipping
+		vector<Triangle4f> tempTris;
+		for(unsigned int i=0; i<tris.size(); i++) {
+			
+				double w1 = abs(tris[i].v[0].pos.w);
+				double w2 = abs(tris[i].v[1].pos.w);
+				double w3 = abs(tris[i].v[2].pos.w);
+				
+				if( abs(tris[i].v[0].pos.x) <= w1 &&
+					abs(tris[i].v[0].pos.y) <= w1 &&
+					abs(tris[i].v[0].pos.z) <= w1 &&
+					
+					abs(tris[i].v[1].pos.x) <= w2 &&
+					abs(tris[i].v[1].pos.y) <= w2 &&
+					abs(tris[i].v[1].pos.z) <= w2 &&
+					
+					abs(tris[i].v[2].pos.x) <= w3 &&
+					abs(tris[i].v[2].pos.y) <= w3 &&
+					abs(tris[i].v[2].pos.z) <= w3    ) {
+					
+					tempTris.push_back(tris[i]);
+				}
+		}
+		
+		// Do culling
+		if(enableCulling) {
+			tris.clear();
+			for(unsigned int i=0; i<tempTris.size(); i++)
+				switch(orientationOpt) {
+					case 0:
+						if( dotProduct(cameraN,vector3f(tempTris[i].normal.x,tempTris[i].normal.y,tempTris[i].normal.z)) > 0 )
+							tris.push_back(tempTris[i]);
+						break;
+					case 1:
+						if( dotProduct(cameraN,vector3f(tempTris[i].normal.x,tempTris[i].normal.y,tempTris[i].normal.z)) < 0 )
+							tris.push_back(tempTris[i]);
+						break;
+				}
+		}
+		else
+			tris = tempTris;
+		
 
 		for(unsigned int i=0; i<tris.size(); i++)
 			for(unsigned int vi=0; vi<3; vi++) {
-				
 				// Perspective division				
 				tris[i].v[vi].pos = tris[i].v[vi].pos / tris[i].v[vi].pos.w;
 
-				//printf("%.1f\t%.1f\t%.1f\t%.1f\n",tris[i].v[vi].pos.x,tris[i].v[vi].pos.y,tris[i].v[vi].pos.z,tris[i].v[vi].pos.w);
-				
 				// Map vertices to the Window
 				viewportMatrix.transformVector( &tris[i].v[vi].pos );
-				
-				//printf("%.1f\t%.1f\t%.1f\t%.1f\n",tris[i].v[vi].pos.x,tris[i].v[vi].pos.y,tris[i].v[vi].pos.z,tris[i].v[vi].pos.w);
 			}
 			
 		// Do the 2D drawing
-		drawObject2d();
-	
+		drawTriangles2d(tris);
+		drawOsd();
+		
 	glutSwapBuffers();
 	glutPostRedisplay();
 	frameCounter2++;
@@ -276,14 +325,10 @@ void display2 () {
 
 // PROGRAM /////////////////////////////////////////////////////////////
 
-double getFovx() {
-	return 2*atan( tan(fovy*M_PI/360.)*height/(double)width );
-}
-
 void initWorld()
 {
-	//sprintf(fileName,"data/cow.in");
-	sprintf(fileName,"data/cube.in");
+	sprintf(fileName,"data/cow.in");
+	//sprintf(fileName,"data/cube.in");
 	loadModel();
 }
 
@@ -320,8 +365,8 @@ void loadModel( int nil )
 void initLights () {
 	
 	// ambient light
-	GLfloat ambientColor[] = {0.1, 0.1, 0.1, 1.0f};
-	glLightModelfv(GL_LIGHT_MODEL_AMBIENT, ambientColor);
+	//GLfloat ambientColor[] = {0.1, 0.1, 0.1, 1.0f};
+	//glLightModelfv(GL_LIGHT_MODEL_AMBIENT, ambientColor);
 	
 	{
 		// fixed light
@@ -350,7 +395,6 @@ void initGL()
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 	
 	glEnable(GL_NORMALIZE);		//normalizes all normals
-	glEnable(GL_DEPTH_TEST);
     glEnable(GL_COLOR_MATERIAL);
 
 	updateSettings();
@@ -511,27 +555,26 @@ void resetCamera( int nil )
 	z1 = ( (object.maxPoint.y-object.minPoint.y)*object.size[1] + object.pos[1])
 			/ 2.*tan(fovy*M_PI/360.);
 	
-	//calculate fovx based on fovy
-	double fovx = getFovx();
-	
 	//get the optimal z acording to X dimensions (width) of the object
 	z2 = ( (object.maxPoint.x-object.minPoint.x)*object.size[0] + object.pos[0])
-			/ 2.*tan(fovx/2.);
+			/ 2.*tan(fovx*M_PI/360.);
 	
 	//decide which z to take
 	z = z1>z2 ? z1 : z2;
 	
-	cameraPos.z = z + object.maxPoint.z*object.size[2] + object.pos[2];	
+	cameraPos.z = z + object.maxPoint.z*object.size[2] + object.pos[2];
 }	
 
 void callReshape( int nil )
 {
 	reshape(width,height);
-	//reshape2(width,height);
+	reshape2(width,height);
 }
 
 void updateSettings( int nil )
 {
+	glutSetWindow(mainWindow);
+	
 	// Light
 	enableLight ? glEnable(GL_LIGHTING) : glDisable(GL_LIGHTING);
 	enableFixedLight ? glEnable(GL_LIGHT0) : glDisable(GL_LIGHT0);
@@ -558,7 +601,7 @@ void updateSettings( int nil )
 
 void createGuiWindow()
 {
-	GLUI *glui = GLUI_Master.create_glui("GUI",0,WINDOWSX+width,WINDOWSY);
+	GLUI *glui = GLUI_Master.create_glui("GUI",0,WINDOWSX+width+10,WINDOWSY);
 
 	GLUI_Panel *lp = glui->add_panel("World");
 		glui->add_checkbox_to_panel( lp, "Enable Lighting", &enableLight, 0, updateSettings );
@@ -598,7 +641,8 @@ void createGuiWindow()
 			GLUI_RadioGroup *cameragroup = glui->add_radiogroup_to_panel(cpm, &cameraMoveOpt);
 				glui->add_radiobutton_to_group( cameragroup, "Free" );
 				glui->add_radiobutton_to_group( cameragroup, "Centering" );
-		glui->add_spinner_to_panel( cp, "Field of view:", GLUI_SPINNER_FLOAT, &fovy, 0, callReshape );
+		glui->add_spinner_to_panel( cp, "fovx:", GLUI_SPINNER_FLOAT, &fovx, 0, callReshape );
+		glui->add_spinner_to_panel( cp, "fovy:", GLUI_SPINNER_FLOAT, &fovy, 0, callReshape );
 		glui->add_spinner_to_panel( cp, "Near Clip:", GLUI_SPINNER_FLOAT, &clipNear, 0, callReshape );
 		glui->add_spinner_to_panel( cp, "Far Clip:", GLUI_SPINNER_FLOAT, &clipFar, 0, callReshape );
 		glui->add_button_to_panel( cp, "Reset position", 0, resetCamera );
@@ -632,7 +676,7 @@ int main (int argc, char **argv) {
 	glutTimerFunc(1000/*1sec*/, updateFPS, 0);
 	
 	// Close2GL Window
-	glutInitWindowPosition(WINDOWSX+width+210,WINDOWSY);
+	glutInitWindowPosition(WINDOWSX+width+220,WINDOWSY);
 	ninjaWindow = glutCreateWindow ("NinjaGL");
 	
     glutDisplayFunc(display2);

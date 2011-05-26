@@ -82,6 +82,7 @@ int Object::readFromFile( string filename )
 	// read triangles and material count
 	fscanf(fp,"# triangles = %d\n", &ntriangles);
 	fscanf(fp,"Material count = %d\n", &nmaterials);
+	ntriangles = ntriangles;
 	
 	// set size of materials vector
 	materials.resize(nmaterials);

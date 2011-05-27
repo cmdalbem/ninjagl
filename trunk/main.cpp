@@ -18,7 +18,7 @@ using namespace std;
 
 // GLOBALS ////////////////////////////////////////////////////////////
 
-#define 		BG_COLOR 0.2, 0.2, 0.3
+#define 		BG_COLOR 0.2, 0.2, 0.2
 #define 		OSD_LINES 2
 #define			WINDOWSX 100
 #define			WINDOWSY 300
@@ -38,9 +38,9 @@ int				width=620, height=620;
 vector3f		cameraPos, cameraU, cameraV, cameraN;
 
 // GUI controlled
-float			fovy=90, fovx=90, clipNear=0.1, clipFar=3000;
+float			fovy=60, fovx=60, clipNear=0.1, clipFar=3000;
 int				drawOpt=1, cameraMoveOpt, orientationOpt, shadeOpt;
-int				enableFixedLight=1, enableRotLight=1, enableCulling=1, 
+int				enableFixedLight=1, enableRotLight=1, enableCulling=0, 
 				enableDrawNormals=0, enableDrawBoundingBox=0, enableColoredDraw=0,
 				enableLight=0;
 vector3f		forceColor={1,1,1};
@@ -58,6 +58,13 @@ void loadModel( int nil=0 );
 
 void drawObjects()
 {
+	// Model Drawing
+	switch(drawOpt) {
+		case 0:	glPolygonMode( GL_FRONT_AND_BACK, GL_FILL ); break;
+		case 1:	glPolygonMode( GL_FRONT_AND_BACK, GL_LINE ); break;
+		case 2:	glPolygonMode( GL_FRONT_AND_BACK, GL_POINT ); break;
+	}
+	
 	if(enableColoredDraw) {
 		object.forceColor = forceColor;
 		object.draw(true);
@@ -96,11 +103,11 @@ void drawOsd()
 
 		glColor3f(1.,1.,1.);
 
-		glRasterPos3f(-1.3,0.9,-1);
+		glRasterPos3f(-0.55,0.52,-1);
 		for( int ch = 0; ch < (int)strlen(osd[0]); ch++) 
 			glutBitmapCharacter(GLUT_BITMAP_HELVETICA_18, osd[0][ch]);
 
-		glRasterPos3f(-1.3,0.9-0.08,-1);
+		glRasterPos3f(-0.55,0.52-0.04,-1);
 		for( int ch = 0; ch < (int)strlen(fileName); ch++) 
 			glutBitmapCharacter(GLUT_BITMAP_HELVETICA_18, fileName[ch]);
    
@@ -151,10 +158,10 @@ matrix4x4f modelviewMatrix, projectionMatrix, viewportMatrix;
 void updateModelviewMatrix()
 {
 	matrix4x4f *m = &modelviewMatrix;
-	m->m[0]=cameraU.x;	m->m[4]=cameraU.y;	m->m[8]=cameraU.z;	m->m[12]=-dotProduct(cameraPos,cameraU);
-    m->m[1]=cameraV.x;	m->m[5]=cameraV.y;	m->m[9]=cameraV.z;	m->m[13]=-dotProduct(cameraPos,cameraV);
+	m->m[0]=cameraU.x;	m->m[4]=cameraU.y;	m->m[8]=cameraU.z;		m->m[12]=-dotProduct(cameraPos,cameraU);
+    m->m[1]=cameraV.x;	m->m[5]=cameraV.y;	m->m[9]=cameraV.z;		m->m[13]=-dotProduct(cameraPos,cameraV);
     m->m[2]=-cameraN.x;	m->m[6]=-cameraN.y;	m->m[10]=-cameraN.z;	m->m[14]=dotProduct(cameraPos,cameraN);
-    m->m[3]=0; 			m->m[7]=0; 			m->m[11]=0;			m->m[15]=1;	
+    m->m[3]=0; 			m->m[7]=0; 			m->m[11]=0;				m->m[15]=1;	
 }
 
 void updateProjectionMatrix()
@@ -172,8 +179,7 @@ void updateProjectionMatrix()
 	m->m[0]=2*n/(r-l);	m->m[4]=0;			m->m[8]=(r+l)/(r-l);	m->m[12]=0;
     m->m[1]=0;			m->m[5]=2*n/(t-b);	m->m[9]=(t+b)/(t-b);	m->m[13]=0;
     m->m[2]=0;			m->m[6]=0;			m->m[10]=-(f+n)/(f-n);	m->m[14]=-(2*f*n)/(f-n);
-    m->m[3]=0; 			m->m[7]=0; 			m->m[11]=-1;			m->m[15]=0;
-	
+    m->m[3]=0; 			m->m[7]=0; 			m->m[11]=-1;			m->m[15]=0;	
 }
 
 void updateViewportMatrix( double lv, double rv, double bv, double tv )
@@ -389,6 +395,18 @@ void initLights () {
 	}
 }
 
+void initGL2()
+{
+    glClearColor(BG_COLOR, 1.0f);
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+	
+	glEnable(GL_NORMALIZE);		//normalizes all normals
+    //glEnable(GL_COLOR_MATERIAL);
+    //glEnable(GL_DEPTH_TEST);
+
+	//updateSettings();
+}
+
 void initGL()
 {
     glClearColor(BG_COLOR, 1.0f);
@@ -396,6 +414,7 @@ void initGL()
 	
 	glEnable(GL_NORMALIZE);		//normalizes all normals
     glEnable(GL_COLOR_MATERIAL);
+    glEnable(GL_DEPTH_TEST);
 
 	updateSettings();
 }
@@ -552,12 +571,10 @@ void resetCamera( int nil )
 	double z, z1, z2;
 	
 	//get the optimal z acording to Y dimensions (height) of the object
-	z1 = ( (object.maxPoint.y-object.minPoint.y)*object.size[1] + object.pos[1])
-			/ 2.*tan(fovy*M_PI/360.);
+	z1 = (object.maxPoint.y-object.minPoint.y) / (2.*tan(fovy*M_PI/360.));
 	
-	//get the optimal z acording to X dimensions (width) of the object
-	z2 = ( (object.maxPoint.x-object.minPoint.x)*object.size[0] + object.pos[0])
-			/ 2.*tan(fovx*M_PI/360.);
+	//get the optimal z acording to X dimensions (width) of the object	
+	z2 = (object.maxPoint.x-object.minPoint.x) / (2.*tan(fovx*M_PI/360.));
 	
 	//decide which z to take
 	z = z1>z2 ? z1 : z2;
@@ -579,13 +596,6 @@ void updateSettings( int nil )
 	enableLight ? glEnable(GL_LIGHTING) : glDisable(GL_LIGHTING);
 	enableFixedLight ? glEnable(GL_LIGHT0) : glDisable(GL_LIGHT0);
 	enableRotLight ? glEnable(GL_LIGHT1) : glDisable(GL_LIGHT1);
-	
-	// Model Drawing
-	switch(drawOpt) {
-		case 0:	glPolygonMode( GL_FRONT_AND_BACK, GL_FILL ); break;
-		case 1:	glPolygonMode( GL_FRONT_AND_BACK, GL_LINE ); break;
-		case 2:	glPolygonMode( GL_FRONT_AND_BACK, GL_POINT ); break;
-	}
 	
 	// OpenGL
 	switch(shadeOpt) {
@@ -688,7 +698,7 @@ int main (int argc, char **argv) {
     glutMouseFunc(mouseFunc);
 	glutMotionFunc(mouseMotionFunc);
 	
-	initGL();
+	initGL2();
 	glutTimerFunc(1000/*1sec*/, updateFPS2, 0);
 	
 	// More inits

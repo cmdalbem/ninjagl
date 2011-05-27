@@ -294,17 +294,21 @@ void display2 () {
 		// Do culling
 		if(enableCulling) {
 			tris.clear();
-			for(unsigned int i=0; i<tempTris.size(); i++)
+			for(unsigned int i=0; i<tempTris.size(); i++) {
+				
+				vector3f tnormal = vector3f(tempTris[i].normal.x,tempTris[i].normal.y,tempTris[i].normal.z);
+				
 				switch(orientationOpt) {
 					case 0:
-						if( dotProduct(cameraN,vector3f(tempTris[i].normal.x,tempTris[i].normal.y,tempTris[i].normal.z)) > 0 )
+						if( dotProduct(-cameraN,tnormal) > 0 )
 							tris.push_back(tempTris[i]);
 						break;
 					case 1:
-						if( dotProduct(cameraN,vector3f(tempTris[i].normal.x,tempTris[i].normal.y,tempTris[i].normal.z)) < 0 )
+						if( dotProduct(-cameraN,tnormal) < 0 )
 							tris.push_back(tempTris[i]);
 						break;
 				}
+			}
 		}
 		else
 			tris = tempTris;

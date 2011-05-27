@@ -156,6 +156,8 @@ int Object::readFromFile( string filename )
 		fscanf(fp, "face normal %f %f %f\n",
 					&(tris[i].normal.x), &(tris[i].normal.y),
 					&(tris[i].normal.z));
+		
+		tris[i].normal = -crossProduct( (tris[i].v[1].pos-tris[i].v[0].pos), (tris[i].v[2].pos-tris[i].v[1].pos) );
 	}
 	centerPoint.x = (maxPoint.x + minPoint.x)/2;
 	centerPoint.y = (maxPoint.y + minPoint.y)/2;

@@ -52,7 +52,7 @@ static bool     heldCtrl=false, heldShift=false;
 // GUI controlled
 float			fovy=60, fovx=60, clipNear=0.1, clipFar=3000;
 int				drawOpt=2, cameraMoveOpt, orientationOpt, shadeOpt=1;
-int				enableLight0=1, enableRotLight=1, enableCulling=0, 
+int				enableLight0=1, enableRotLight=1, enableCulling=1, 
 				enableDrawNormals=0, enableDrawBoundingBox=0, enableColoredDraw=0,
 				enableLight=0;
 float			forceColor[] = {1,1,1};
@@ -75,6 +75,11 @@ void** allocMatrix(int sizex, int sizey, int typeSize)
                 matrix[i] = (void*) calloc(sizey, typeSize);
                 
         return matrix;  
+}
+
+inline float triangleArea( vector4f a, vector4f b, vector4f c )
+{
+	return abs((b.x*a.y-a.x*b.y)+(c.x*b.y-b.x*c.y)+(a.x*c.y-c.x*a.y))/2;
 }
 
 
@@ -220,6 +225,9 @@ void reshape2(int w, int h) {
 	width = w;
 	height = h;
 	
+	//colorBuffer = (rgbaf**) allocMatrix(w,h,sizeof(rgbaf));
+	//zBuffer = (float**) allocMatrix(w,h,sizeof(float));
+	
 	glViewport(0, 0, (GLsizei) w, (GLsizei) h);
 	
 	glMatrixMode(GL_PROJECTION);
@@ -294,124 +302,40 @@ void rasterizeTriangles2d( vector<Triangle4f> tris )
 		switch(drawOpt) {
 			case 0:
 				{
-					/*static float x, y, d0, d1, x0, x1;
-					vector4f A, B, C;
-					bool picked[] = {false,false,false};
-					// GL_FILL
-					C = tris[i].v[0].pos;
-					for(int k=1; k<3; k++)
-						if(tris[i].v[k].pos.y > C.y) {
-							C = tris[i].v[k].pos;
-						}
-					for(int k=1; k<3; k++)
-						if(C.x == tris[i].v[k].pos.x && C.y == tris[i].v[k].pos.y)
-							picked[k] = true;
-					B = tris[i].v[0].pos;
-					for(int k=1; k<3; k++)
-						if(tris[i].v[k].pos.x > B.x) {
-							B = tris[i].v[k].pos;		
-						}			
-					for(int k=1; k<3; k++)
-						if(B.x == tris[i].v[k].pos.x && B.y == tris[i].v[k].pos.y)
-							picked[k] = true;
-					A = tris[i].v[0].pos;
-					for(int k=1; k<3; k++)
-						if(!picked[k])
-							A = tris[i].v[k].pos;
+					Vertex4f a = tris[i].v[0];
+					Vertex4f b = tris[i].v[1];
+					Vertex4f c = tris[i].v[2];
 					
-					d0 = (C.x-A.x)/(C.y-A.y);
-					d1 = (C.x-B.x)/(C.y-B.y);
-					
-					if(A.y > B.y) y = A.y;
-					else y = B.y;
-					x0 = A.x;
-					x1 = B.x;
-					while ( y <= C.y ) {
-					   for ( int x = x0; x <= x1; x++ )
-						  colorBuffer[(int)y][(int)x] = shadeTriangle(tris[i]);
-					   x0 += d0;
-					   x1 += d1;
-					   y++;
+					float boxp1[2]={a.pos.x, a.pos.y},
+						  boxp2[2]={a.pos.x, a.pos.y};
+					for(int k=0; k<3; k++) {
+						if( tris[i].v[k].pos.x < boxp1[0] )
+							boxp1[0] = tris[i].v[k].pos.x;
+						if( tris[i].v[k].pos.y < boxp1[1] )
+							boxp1[1] = tris[i].v[k].pos.y;
+						if( tris[i].v[k].pos.x > boxp2[0] )
+							boxp2[0] = tris[i].v[k].pos.x;
+						if( tris[i].v[k].pos.y > boxp2[1] )
+							boxp2[1] = tris[i].v[k].pos.y;
 					}
-					
-					if(A.y > B.y)
-						C = A;
-					else
-						C = B;
-						
-					if(A.y > B.y) y = A.y;
-					else y = B.y;
-					x0 = A.x;
-					x1 = B.x;
-					while ( y >= C.y ) {
-					   for ( int x = x0; x <= x1; x++ )
-						  colorBuffer[(int)y][(int)x] = shadeTriangle(tris[i]);
-					   x0 += d0;
-					   x1 += d1;
-					   y--;
-					}*/
-
-					static float dx0,dy0, dx1,dy1, dx2,dy2, incx0, incx1, incx2;
-					static float dy;
-					static float x1, x2, y, x;
-					
-					// choose right vertices
-					vector<Vertex4f> verts;
-					for(int k=0; k<3; k++)
-						verts.push_back(tris[i].v[k]);
-					Vertex4f a, b, c;
-					int sel=0;
-					for(int k=0; k<3; k++)
-						if(verts[k].pos.y > verts[sel].pos.y)
-							sel = k;
-					b = verts[sel];
-					verts.erase(verts.begin()+sel);
-					// choose a and c
-					if(verts[0].pos.x < verts[1].pos.x) {
-						a = verts[0];
-						c = verts[1];
-					}
-					else {
-						a = verts[0];
-						c = verts[1];
-					}
-					
-
-					dx0 = b.pos.x - a.pos.x;
-					dx1 = c.pos.x - b.pos.x;
-					dx2 = a.pos.x - c.pos.x;
-					
-					dy0 = b.pos.y - a.pos.y;
-					dy1 = b.pos.y - c.pos.y;
-					dy2 = a.pos.y - c.pos.y;
-					
-					if(dy2>0)
-						dy = dy0;
-					else
-						dy = dy1;
-					
-					incx0 = dx0/dy0;
-					incx1 = dx1/dy1;
-					incx2 = dx2/dy2;
-					
-					y = b.pos.y;
-					for(int k=0; k<dy; k++) {
-						x1 = b.pos.x + k*incx0;
-						x2 = b.pos.x + k*incx1;
-						y++;
-
-						colorBuffer[(int)y][(int)x1] = shadeTriangle(tris[i]);
-						colorBuffer[(int)y][(int)x2] = shadeTriangle(tris[i]);
-						//for(x=x1; x<x2; x++)
-							//colorBuffer[(int)y][(int)x] = shadeTriangle(tris[i]);
+					for(int x=boxp1[0]; x<boxp2[0]; x++)
+						for(int y=boxp1[1]; y<boxp2[1]; y++) {
+							static float u,v,w;
+							static float area;
+							area = triangleArea(a.pos, b.pos, c.pos);
+							u = triangleArea( vector4f(x,y,0,0), b.pos, c.pos) / area;
+							v = triangleArea( a.pos, vector4f(x,y,0,0), c.pos) / area;
+							w = triangleArea( a.pos, b.pos, vector4f(x,y,0,0)) / area;
+							if(u+v+w <= 1) //inside triangle
+								colorBuffer[(int)y][(int)x] = shadeTriangle(tris[i]);
 					}
 				}
-				//break;
+				break;
 			
 			case 2: 
 				// GL_POINT
 				for(int k=0; k<3; k++)
-					colorBuffer[(int)tris[i].v[k].pos.y][(int)tris[i].v[k].pos.x] = {1,1,1,1};//shadeTriangle(tris[i]);
+					colorBuffer[(int)tris[i].v[k].pos.y][(int)tris[i].v[k].pos.x] = shadeTriangle(tris[i]);
 					
 				break;
 				

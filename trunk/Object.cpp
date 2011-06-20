@@ -84,23 +84,27 @@ int Object::readFromFile( string filename )
 	fscanf(fp,"Material count = %d\n", &nmaterials);
 	ntriangles = ntriangles;
 	
-	// set size of materials vector
-	materials.resize(nmaterials);
+	//materials.resize(nmaterials);
 	
 	// read materials
 	for (int i=0; i<nmaterials; i++) {
-		fscanf(fp, "ambient color %f %f %f\n", &(materials[i].ambient[0]), &(materials[i].ambient[1]), &(materials[i].ambient[2]));
-		fscanf(fp, "diffuse color %f %f %f\n", &(materials[i].diffuse[0]), &(materials[i].diffuse[1]), &(materials[i].diffuse[2]));
-		fscanf(fp, "specular color %f %f %f\n", &(materials[i].specular[0]), &(materials[i].specular[1]), &(materials[i].specular[2]));
-		fscanf(fp, "material shine %f\n", &(materials[i].shininess));
+		fscanf(fp, "ambient color %f %f %f\n", &(material.ambient[0]), &(material.ambient[1]), &(material.ambient[2]));
+		fscanf(fp, "diffuse color %f %f %f\n", &(material.diffuse[0]), &(material.diffuse[1]), &(material.diffuse[2]));
+		fscanf(fp, "specular color %f %f %f\n", &(material.specular[0]), &(material.specular[1]), &(material.specular[2]));
+		fscanf(fp, "material shine %f\n", &(material.shininess));
 	}
+	
+	char chasTex[8];
+	bool bhasTex;
+	fscanf(fp,"Texture = %s\n", chasTex);
+	bhasTex = (chasTex[0] == 'Y') ? true : false;
 	
 	// skip documentation line
 	fscanf(fp, "%c", &ch);
 	while(ch!= '\n')
 		fscanf(fp, "%c", &ch);
 	
-	printf ("Reading in %s (%d triangles)...\n", filename.c_str(), ntriangles);
+	printf ("Reading in %s (%d%s triangles)...\n", filename.c_str(), ntriangles, bhasTex?" texturized":"");
 	
 	// set size of triangles vector
 	tris.resize(ntriangles);
@@ -108,16 +112,21 @@ int Object::readFromFile( string filename )
 	// read triangles
 	maxPoint = {-9999,-9999,-9999};
 	minPoint = {9999,9999,9999};
-	for (int i=0; i<ntriangles; i++)
-	{
+	for (int i=0; i<ntriangles; i++) {
 		int k = 0;
-			fscanf(fp, "v0 %f %f %f %f %f %f %d\n",
-						&(tris[i].v[k].pos.x), &(tris[i].v[k].pos.y), &(tris[i].v[k].pos.z),
-						&(tris[i].v[k].normal.x), &(tris[i].v[k].normal.y), &(tris[i].v[k].normal.z),
-						&(materialIndex));
-			tris[i].v[k].color[0] = materials[materialIndex].diffuse[0];
-			tris[i].v[k].color[1] = materials[materialIndex].diffuse[1];
-			tris[i].v[k].color[2] = materials[materialIndex].diffuse[2];
+			if(bhasTex)
+				fscanf(fp, "v0 %f %f %f %f %f %f %d %f %f\n",
+							&(tris[i].v[k].pos.x), &(tris[i].v[k].pos.y), &(tris[i].v[k].pos.z),
+							&(tris[i].v[k].normal.x), &(tris[i].v[k].normal.y), &(tris[i].v[k].normal.z), //ignored
+							&(materialIndex), &(tris[i].s), &(tris[i].t));
+			else
+				fscanf(fp, "v0 %f %f %f %f %f %f %d\n",
+							&(tris[i].v[k].pos.x), &(tris[i].v[k].pos.y), &(tris[i].v[k].pos.z),
+							&(tris[i].v[k].normal.x), &(tris[i].v[k].normal.y), &(tris[i].v[k].normal.z), //ignored
+							&(materialIndex));
+			tris[i].v[k].color[0] = material.diffuse[0];
+			tris[i].v[k].color[1] = material.diffuse[1];
+			tris[i].v[k].color[2] = material.diffuse[2];
 			if(tris[i].v[k].pos.x > maxPoint.x) maxPoint.x = tris[i].v[k].pos.x;
 			if(tris[i].v[k].pos.y > maxPoint.y) maxPoint.y = tris[i].v[k].pos.y;
 			if(tris[i].v[k].pos.z > maxPoint.z) maxPoint.z = tris[i].v[k].pos.z;
@@ -125,13 +134,19 @@ int Object::readFromFile( string filename )
 			if(tris[i].v[k].pos.y < minPoint.y) minPoint.y = tris[i].v[k].pos.y;
 			if(tris[i].v[k].pos.z < minPoint.z) minPoint.z = tris[i].v[k].pos.z;
 		k = 1;
-			fscanf(fp, "v1 %f %f %f %f %f %f %d\n",
-						&(tris[i].v[k].pos.x), &(tris[i].v[k].pos.y), &(tris[i].v[k].pos.z),
-						&(tris[i].v[k].normal.x), &(tris[i].v[k].normal.y), &(tris[i].v[k].normal.z),
-						&(materialIndex));
-			tris[i].v[k].color[0] = materials[materialIndex].diffuse[0];
-			tris[i].v[k].color[1] = materials[materialIndex].diffuse[1];
-			tris[i].v[k].color[2] = materials[materialIndex].diffuse[2];
+			if(bhasTex)
+				fscanf(fp, "v1 %f %f %f %f %f %f %d %f %f\n",
+							&(tris[i].v[k].pos.x), &(tris[i].v[k].pos.y), &(tris[i].v[k].pos.z),
+							&(tris[i].v[k].normal.x), &(tris[i].v[k].normal.y), &(tris[i].v[k].normal.z), //ignored
+							&(materialIndex), &(tris[i].s), &(tris[i].t));
+			else
+				fscanf(fp, "v1 %f %f %f %f %f %f %d\n",
+							&(tris[i].v[k].pos.x), &(tris[i].v[k].pos.y), &(tris[i].v[k].pos.z),
+							&(tris[i].v[k].normal.x), &(tris[i].v[k].normal.y), &(tris[i].v[k].normal.z), //ignored
+							&(materialIndex));
+			tris[i].v[k].color[0] = material.diffuse[0];
+			tris[i].v[k].color[1] = material.diffuse[1];
+			tris[i].v[k].color[2] = material.diffuse[2];
 			if(tris[i].v[k].pos.x > maxPoint.x) maxPoint.x = tris[i].v[k].pos.x;
 			if(tris[i].v[k].pos.y > maxPoint.y) maxPoint.y = tris[i].v[k].pos.y;
 			if(tris[i].v[k].pos.z > maxPoint.z) maxPoint.z = tris[i].v[k].pos.z;
@@ -139,13 +154,19 @@ int Object::readFromFile( string filename )
 			if(tris[i].v[k].pos.y < minPoint.y) minPoint.y = tris[i].v[k].pos.y;
 			if(tris[i].v[k].pos.z < minPoint.z) minPoint.z = tris[i].v[k].pos.z;
 		k = 2;
-			fscanf(fp, "v2 %f %f %f %f %f %f %d\n",
-						&(tris[i].v[k].pos.x), &(tris[i].v[k].pos.y), &(tris[i].v[k].pos.z),
-						&(tris[i].v[k].normal.x), &(tris[i].v[k].normal.y), &(tris[i].v[k].normal.z),
-						&(materialIndex));
-			tris[i].v[k].color[0] = materials[materialIndex].diffuse[0];
-			tris[i].v[k].color[1] = materials[materialIndex].diffuse[1];
-			tris[i].v[k].color[2] = materials[materialIndex].diffuse[2];
+			if(bhasTex)
+				fscanf(fp, "v2 %f %f %f %f %f %f %d %f %f\n",
+							&(tris[i].v[k].pos.x), &(tris[i].v[k].pos.y), &(tris[i].v[k].pos.z),
+							&(tris[i].v[k].normal.x), &(tris[i].v[k].normal.y), &(tris[i].v[k].normal.z), //ignored
+							&(materialIndex), &(tris[i].s), &(tris[i].t));
+			else
+				fscanf(fp, "v2 %f %f %f %f %f %f %d\n",
+							&(tris[i].v[k].pos.x), &(tris[i].v[k].pos.y), &(tris[i].v[k].pos.z),
+							&(tris[i].v[k].normal.x), &(tris[i].v[k].normal.y), &(tris[i].v[k].normal.z), //ignored
+							&(materialIndex));
+			tris[i].v[k].color[0] = material.diffuse[0];
+			tris[i].v[k].color[1] = material.diffuse[1];
+			tris[i].v[k].color[2] = material.diffuse[2];
 			if(tris[i].v[k].pos.x > maxPoint.x) maxPoint.x = tris[i].v[k].pos.x;
 			if(tris[i].v[k].pos.y > maxPoint.y) maxPoint.y = tris[i].v[k].pos.y;
 			if(tris[i].v[k].pos.z > maxPoint.z) maxPoint.z = tris[i].v[k].pos.z;
@@ -158,6 +179,7 @@ int Object::readFromFile( string filename )
 					&(tris[i].normal.z));
 		
 		tris[i].normal = -crossProduct( (tris[i].v[1].pos-tris[i].v[0].pos), (tris[i].v[2].pos-tris[i].v[1].pos) );
+		tris[i].normal.normalize();
 	}
 	centerPoint.x = (maxPoint.x + minPoint.x)/2;
 	centerPoint.y = (maxPoint.y + minPoint.y)/2;
@@ -169,7 +191,7 @@ int Object::readFromFile( string filename )
 }
 
 
-void Object::drawBegin() const
+void Object::drawBegin() const 
 {
 	glPushMatrix();
 	
@@ -180,6 +202,8 @@ void Object::drawBegin() const
 	glRotatef(rot[2],0,0,1);
 	
 	glScalef(size[0], size[1], size[2]);
+	
+	material.apply();
 }
 
 void Object::drawEnd() const
@@ -193,14 +217,14 @@ void Object::draw( bool isColored ) const
 	
 		glBegin(GL_TRIANGLES);
 		if(isColored)
-			glColor3f( forceColor.x,forceColor.y,forceColor.z );
+			glColor3f( forceColor[0],forceColor[1],forceColor[2] );
 		for(unsigned int i=0; i<tris.size(); i++) {
 			for(int k=0; k<3; k++) {
 				if(!isColored)
 					glColor3f( tris[i].v[k].color[0],
 								tris[i].v[k].color[1],
-								tris[i].v[k].color[2]);
-				glNormal3f(tris[i].v[k].normal.x, tris[i].v[k].normal.y, tris[i].v[k].normal.z);
+								tris[i].v[k].color[2]); 
+				glNormal3f(tris[i].v[k].normal.x, tris[i].v[k].normal.y, tris[i].v[k].normal.z); 
 				glVertex3f(tris[i].v[k].pos.x, tris[i].v[k].pos.y, tris[i].v[k].pos.z);
 			}
 		}

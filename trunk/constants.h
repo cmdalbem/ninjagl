@@ -26,6 +26,7 @@ struct Triangle3f
 {
 	Vertex3f v[3];
 	vector3f normal;
+	float s, t;
 };
 
 struct Vertex4f

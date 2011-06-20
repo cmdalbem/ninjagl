@@ -15,35 +15,47 @@
 						 
 using namespace std;
 
+struct rgbaf {
+	float r, g, b, a;
+};
 
 // GLOBALS ////////////////////////////////////////////////////////////
 
-#define 		BG_COLOR 0.2, 0.2, 0.2
 #define 		OSD_LINES 2
 #define			WINDOWSX 100
 #define			WINDOWSY 300
-			
-int				mainWindow, ninjaWindow;
-Object			object;
-vector<Triangle4f> objTris;
+
+	
+float				bgColor[] = {0.2, 0.2, 0.2};
+long int			frameCounter, frameCounter2, fps, fps2;
+char 				osd[OSD_LINES][256], osd2[OSD_LINES][256];
+int					width=620, height=620;
+vector3f			cameraPos, cameraU, cameraV, cameraN;
+
+int					mainWindow, ninjaWindow;
+Object				object;
+vector<Triangle4f> 	objTris;
+//float 				**colorBuffer[4] /*R, G, B, A*/, **zBuffer;
+rgbaf 				colorBuffer[620][620];
+float				zBuffer[620][620];
+
+// Light
+Material			light0;
+vector4f			light0Pos;
+float				ambientLight[4] = {0.1, 0.1, 0.1, 1.0f};
 
 // Mouse-Keyboard
 static int      xold, yold;		
 static int	    left_click=GLUT_UP, right_click=GLUT_UP, middle_click=GLUT_UP;
 static bool     heldCtrl=false, heldShift=false;
 
-long int		frameCounter, frameCounter2, fps, fps2;
-char 			osd[OSD_LINES][256], osd2[OSD_LINES][256];
-int				width=620, height=620;
-vector3f		cameraPos, cameraU, cameraV, cameraN;
-
 // GUI controlled
 float			fovy=60, fovx=60, clipNear=0.1, clipFar=3000;
-int				drawOpt=1, cameraMoveOpt, orientationOpt, shadeOpt;
-int				enableFixedLight=1, enableRotLight=1, enableCulling=0, 
+int				drawOpt=2, cameraMoveOpt, orientationOpt, shadeOpt=1;
+int				enableLight0=1, enableRotLight=1, enableCulling=0, 
 				enableDrawNormals=0, enableDrawBoundingBox=0, enableColoredDraw=0,
 				enableLight=0;
-vector3f		forceColor={1,1,1};
+float			forceColor[] = {1,1,1};
 char			fileName[256];
 
 
@@ -52,6 +64,18 @@ char			fileName[256];
 void resetCamera( int nil=0 );
 void updateSettings( int nil=0 );
 void loadModel( int nil=0 );
+
+
+void** allocMatrix(int sizex, int sizey, int typeSize)
+{
+        void** matrix;
+        
+        matrix = (void**) calloc(sizex, 4);
+        for(int i=0; i<sizex; i++)
+                matrix[i] = (void*) calloc(sizey, typeSize);
+                
+        return matrix;  
+}
 
 
 // OPENGL //////////////////////////////////////////////////////////////
@@ -66,7 +90,8 @@ void drawObjects()
 	}
 	
 	if(enableColoredDraw) {
-		object.forceColor = forceColor;
+		for(int i=0; i<3; i++)
+			object.forceColor[i] = forceColor[i];
 		object.draw(true);
 	}
 	else
@@ -79,13 +104,10 @@ void drawObjects()
 
 void lights()
 {			
-	GLfloat pos[] = { 0 , 200 , 0 , 1.0f };
-	glLightfv(GL_LIGHT0, GL_POSITION, pos);
-	
-	static float posIter = 0;
+	/*static float posIter = 0;
 	GLfloat pos2[] = { (float)sin(posIter)*300 , 100 , (float)cos(posIter)*150 , 1.0f };
 	glLightfv(GL_LIGHT1, GL_POSITION, pos2);
-	posIter += 0.01;
+	posIter += 0.01;*/
 }
 
 void camera()
@@ -202,13 +224,116 @@ void reshape2(int w, int h) {
 	
 	glMatrixMode(GL_PROJECTION);
 	glLoadIdentity();
-	gluOrtho2D(0., 1., 0., 1.);
+	gluOrtho2D(0., width, 0., height);
 	
 	glMatrixMode(GL_MODELVIEW);
 	
 	updateProjectionMatrix();
 	
-	updateViewportMatrix(0., 1., 0., 1.);
+	updateViewportMatrix(0., width, 0., height); //same params of gluOrtho2D
+}
+
+void updateFrameBuffer()
+{
+	glutSetWindow(ninjaWindow);
+	glDrawPixels(width, height, GL_RGBA, GL_FLOAT, colorBuffer);
+}
+
+inline rgbaf shadeTriangle( Triangle4f tri )
+{
+	/*
+	switch(shadeOpt) {
+		case 0: glShadeModel(GL_SMOOTH); break;
+		case 1: glShadeModel(GL_FLAT); break;
+	}*/
+	
+	if(enableColoredDraw)
+		return {forceColor[0],
+				forceColor[1],
+				forceColor[2],
+				1 };
+	
+	else if(!enableLight)
+		return {tri.v[0].color[0],
+				tri.v[0].color[1],
+				tri.v[0].color[2],
+				1 };
+	/*else {
+		
+		Material mat = object.material;
+		rgbaf phong;
+
+		phong = ambientLight[i] * mat.ambient[i];
+		//cout << ambientLight[i] * mat.ambient[i] << endl;
+		if(enableLight0) {
+			// diffuse
+			static vector4f l = v.pos - light0Pos;
+			phong += light0.diffuse[i] * mat.diffuse[i] * dotProduct( n, l );
+			
+			// specular
+			/*static vector3f r = l.toVector3f();
+			static matrix4x4f temp;
+			temp.rotate(180, n.toVector3f());
+			temp.transformVector(&r);
+			phong += light0.specular[i] * mat.specular[i] * pow(dotProduct( v.pos.toVector3f() - cameraPos, r ),mat.shininess);*/
+		/*}
+			
+		return phong;
+	}*/
+}
+
+void rasterizeTriangles2d( vector<Triangle4f> tris )
+{
+	/*switch(drawOpt) {
+		case 0:	glPolygonMode( GL_FRONT_AND_BACK, GL_FILL ); break;
+		case 1:	glPolygonMode( GL_FRONT_AND_BACK, GL_LINE ); break;
+		case 2:	glPolygonMode( GL_FRONT_AND_BACK, GL_POINT ); break;
+	}*/
+
+	for(unsigned int i=0; i<tris.size(); i++) {
+		switch(drawOpt) {
+			case 0:
+				// GL_FILL
+				break;
+			
+			case 1:
+				{
+					int iter[] = { 0,1, 1,2, 2,0 };
+					// GL_LINE
+					for(int v=0; v<6; v+=2) {
+						static float dx, dy, incx, incy, actualX, actualY;
+						
+						dx = tris[i].v[iter[v+1]].pos.x - tris[i].v[iter[v]].pos.x;
+						dy = tris[i].v[iter[v+1]].pos.y - tris[i].v[iter[v]].pos.y;
+						if(dx > dy) {
+							incx = 1;
+							incy = dy/dx;
+						}
+						else {
+							incy = 1;
+							incx = dx/dy;
+						}
+						actualX = tris[i].v[iter[v]].pos.x;
+						actualY = tris[i].v[iter[v]].pos.y;
+						
+						for(int k=0; k < (dx>dy?dx:dy); k++) {
+							colorBuffer[(int)actualY][(int)actualX] = shadeTriangle(tris[i]);
+
+							actualX += incx;
+							actualY += incy;
+						}
+					}
+				}				
+				break;
+			
+			case 2: 
+				// GL_POINT
+				for(int k=0; k<3; k++) {
+					colorBuffer[(int)tris[i].v[k].pos.y][(int)tris[i].v[k].pos.x] = shadeTriangle(tris[i]);
+				}
+				break;
+		}
+	}
 }
 
 void drawTriangles2d( vector<Triangle4f> tris )
@@ -216,37 +341,48 @@ void drawTriangles2d( vector<Triangle4f> tris )
 	bool isColored = enableColoredDraw;
 
 	switch(drawOpt) {
-		case 0:	glPolygonMode( GL_FRONT_AND_BACK, GL_FILL ); break;
-		case 1:	glPolygonMode( GL_FRONT_AND_BACK, GL_LINE ); break;
-		case 2:	glPolygonMode( GL_FRONT_AND_BACK, GL_POINT ); break;
+		case 0: glPolygonMode( GL_FRONT_AND_BACK, GL_FILL ); break;
+		case 1: glPolygonMode( GL_FRONT_AND_BACK, GL_LINE ); break;
+		case 2: glPolygonMode( GL_FRONT_AND_BACK, GL_POINT ); break;
 	}
 
 	glBegin(GL_TRIANGLES);
 	if(isColored)
-		glColor3f( forceColor.x,forceColor.y,forceColor.z );
+		glColor3f( forceColor[0],forceColor[1],forceColor[2] );
 	for(unsigned int i=0; i<tris.size(); i++) {
 		for(int k=0; k<3; k++) {
 			if(!isColored)
-				glColor3f( tris[i].v[k].color[0],
-							tris[i].v[k].color[1],
-							tris[i].v[k].color[2]);
+				glColor3f( tris[i].v[k].color[0], tris[i].v[k].color[1], tris[i].v[k].color[2] );
 			glVertex2f(tris[i].v[k].pos.x, tris[i].v[k].pos.y);
 		}
 	}
 	glEnd();
 }
 
+void clearBuffers()
+{
+	for(int i=0; i<width; i++)
+		for(int k=0; k<height; k++) {
+			zBuffer[i][k] = 0;
+			colorBuffer[i][k].r = bgColor[0];
+			colorBuffer[i][k].g = bgColor[1];
+			colorBuffer[i][k].b = bgColor[2];
+			colorBuffer[i][k].a = 1;
+		}
+}
+
+
 void display2 () {
 // The NinjaGL Display Function
 	
-	glutSetWindow(ninjaWindow);
-	glClear( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT );
+	//glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+	clearBuffers();
 	
 	// updates the Model/View Matrix with actual camera settings
 	updateModelviewMatrix();
 		
 	// compute P*M
-	matrix4x4f pm = projectionMatrix * modelviewMatrix;
+	//matrix4x4f pm = projectionMatrix * modelviewMatrix;
 	
 	/*cout << "M:" << endl;
 	modelviewMatrix.print();
@@ -324,8 +460,12 @@ void display2 () {
 			}
 			
 		// Do the 2D drawing
-		drawTriangles2d(tris);
-		drawOsd();
+		rasterizeTriangles2d(tris);
+		updateFrameBuffer();
+		//drawTriangles2d(tris);
+		//drawOsd();
+		
+		////////////////////////////////////////////////////////////////
 		
 	glutSwapBuffers();
 	glutPostRedisplay();
@@ -374,19 +514,25 @@ void loadModel( int nil )
 
 void initLights () {
 	
+	GLfloat pos[] = { 0 , 200 , 0 , 1.0f };
+	glLightfv(GL_LIGHT0, GL_POSITION, pos);
+	light0Pos = vector4f(pos[0], pos[1], pos[2], 0);
+	
 	// ambient light
-	//GLfloat ambientColor[] = {0.1, 0.1, 0.1, 1.0f};
-	//glLightModelfv(GL_LIGHT_MODEL_AMBIENT, ambientColor);
+	glLightModelfv(GL_LIGHT_MODEL_AMBIENT, ambientLight);
 	
 	{
 		// fixed light
-		GLfloat ambientLight[] = { 0.0, 0.0, 0.0, 1.0f };
-		GLfloat diffuseLight[] = { 0.8f, 0.8f, 0.8f, 1.0f };
-		glLightfv(GL_LIGHT0, GL_AMBIENT, ambientLight);
-		glLightfv(GL_LIGHT0, GL_DIFFUSE, diffuseLight);
+		light0.setAmbient( 0.0, 0.0, 0.0 );
+		light0.setDiffuse( 0.8f, 0.8f, 0.8f );
+		light0.setSpecular( 1.f, 1.f, 1.f );
+						   
+		glLightfv(GL_LIGHT0, GL_AMBIENT, light0.ambient);
+		glLightfv(GL_LIGHT0, GL_DIFFUSE, light0.diffuse);
+		glLightfv(GL_LIGHT0, GL_SPECULAR, light0.specular);
 	}
 	
-	{
+	/*{
 		// rotating light
 		GLfloat ambientLight[] = { 0.0, 0.0, 0.0, 1.0f };
 		GLfloat diffuseLight[] = { 0.5f, 0.5f, 0.5f, 1.0f };
@@ -396,24 +542,29 @@ void initLights () {
 		glLightfv(GL_LIGHT1, GL_SPECULAR, specularLight);
 		glLightf(GL_LIGHT1, GL_CONSTANT_ATTENUATION, 0.2);
 		glLightf(GL_LIGHT1, GL_LINEAR_ATTENUATION, 0.001);
-	}
+	}*/
 }
 
 void initGL2()
 {
-    glClearColor(BG_COLOR, 1.0f);
-	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+	/*colorBuffer[0] = (float**) allocMatrix(width, height, sizeof(float));
+	colorBuffer[1] = (float**) allocMatrix(width, height, sizeof(float));
+	colorBuffer[2] = (float**) allocMatrix(width, height, sizeof(float));
+	colorBuffer[3] = (float**) allocMatrix(width, height, sizeof(float));
+	zBuffer = (float**) allocMatrix(width, height, sizeof(float));
+*/
+
+	clearBuffers();
+
 	
-	glEnable(GL_NORMALIZE);		//normalizes all normals
-    //glEnable(GL_COLOR_MATERIAL);
-    //glEnable(GL_DEPTH_TEST);
+	glEnable(GL_NORMALIZE);
 
 	//updateSettings();
 }
 
 void initGL()
 {
-    glClearColor(BG_COLOR, 1.0f);
+    glClearColor(bgColor[0], bgColor[1], bgColor[2], 1.0f);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 	
 	glEnable(GL_NORMALIZE);		//normalizes all normals
@@ -598,7 +749,7 @@ void updateSettings( int nil )
 	
 	// Light
 	enableLight ? glEnable(GL_LIGHTING) : glDisable(GL_LIGHTING);
-	enableFixedLight ? glEnable(GL_LIGHT0) : glDisable(GL_LIGHT0);
+	enableLight0 ? glEnable(GL_LIGHT0) : glDisable(GL_LIGHT0);
 	enableRotLight ? glEnable(GL_LIGHT1) : glDisable(GL_LIGHT1);
 	
 	// OpenGL
@@ -619,7 +770,7 @@ void createGuiWindow()
 
 	GLUI_Panel *lp = glui->add_panel("World");
 		glui->add_checkbox_to_panel( lp, "Enable Lighting", &enableLight, 0, updateSettings );
-		glui->add_checkbox_to_panel( lp, "Enable LIGHT0", &enableFixedLight, 0, updateSettings );
+		glui->add_checkbox_to_panel( lp, "Enable LIGHT0", &enableLight0, 0, updateSettings );
 		glui->add_checkbox_to_panel( lp, "Enable LIGHT1", &enableRotLight, 0, updateSettings );
 	
 	GLUI_Panel *mp = glui->add_panel("Model");
@@ -641,11 +792,11 @@ void createGuiWindow()
 		glui->add_checkbox_to_panel( mp, "Draw Bounding Box", &enableDrawBoundingBox );
 			GLUI_Panel *mpc = glui->add_panel_to_panel(mp,"Coloring");
 				glui->add_checkbox_to_panel( mpc, "Enable", &enableColoredDraw );
-				GLUI_Spinner *rSpin = glui->add_spinner_to_panel( mpc, "R:", GLUI_SPINNER_FLOAT, &forceColor.x );
+				GLUI_Spinner *rSpin = glui->add_spinner_to_panel( mpc, "R:", GLUI_SPINNER_FLOAT, &forceColor[0] );
 					rSpin->set_float_limits( 0., 1., GLUI_LIMIT_CLAMP );
-				GLUI_Spinner *gSpin = glui->add_spinner_to_panel( mpc, "G:", GLUI_SPINNER_FLOAT, &forceColor.y );
+				GLUI_Spinner *gSpin = glui->add_spinner_to_panel( mpc, "G:", GLUI_SPINNER_FLOAT, &forceColor[1] );
 					gSpin->set_float_limits( 0., 1., GLUI_LIMIT_CLAMP );
-				GLUI_Spinner *bSpin = glui->add_spinner_to_panel( mpc, "B:", GLUI_SPINNER_FLOAT, &forceColor.z );
+				GLUI_Spinner *bSpin = glui->add_spinner_to_panel( mpc, "B:", GLUI_SPINNER_FLOAT, &forceColor[2] );
 					bSpin->set_float_limits( 0., 1., GLUI_LIMIT_CLAMP );
 	
 	//glui->add_column(false);
@@ -686,7 +837,6 @@ int main (int argc, char **argv) {
 	glutMotionFunc(mouseMotionFunc);
 	
 	initGL();
-	initLights();
 	glutTimerFunc(1000/*1sec*/, updateFPS, 0);
 	
 	// Close2GL Window
@@ -707,6 +857,7 @@ int main (int argc, char **argv) {
 	
 	// More inits
     initWorld();
+    initLights();
 	
 	createGuiWindow();
 	

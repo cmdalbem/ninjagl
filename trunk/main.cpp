@@ -293,15 +293,134 @@ void rasterizeTriangles2d( vector<Triangle4f> tris )
 	for(unsigned int i=0; i<tris.size(); i++) {
 		switch(drawOpt) {
 			case 0:
-				// GL_FILL
-				break;
+				{
+					/*static float x, y, d0, d1, x0, x1;
+					vector4f A, B, C;
+					bool picked[] = {false,false,false};
+					// GL_FILL
+					C = tris[i].v[0].pos;
+					for(int k=1; k<3; k++)
+						if(tris[i].v[k].pos.y > C.y) {
+							C = tris[i].v[k].pos;
+						}
+					for(int k=1; k<3; k++)
+						if(C.x == tris[i].v[k].pos.x && C.y == tris[i].v[k].pos.y)
+							picked[k] = true;
+					B = tris[i].v[0].pos;
+					for(int k=1; k<3; k++)
+						if(tris[i].v[k].pos.x > B.x) {
+							B = tris[i].v[k].pos;		
+						}			
+					for(int k=1; k<3; k++)
+						if(B.x == tris[i].v[k].pos.x && B.y == tris[i].v[k].pos.y)
+							picked[k] = true;
+					A = tris[i].v[0].pos;
+					for(int k=1; k<3; k++)
+						if(!picked[k])
+							A = tris[i].v[k].pos;
+					
+					d0 = (C.x-A.x)/(C.y-A.y);
+					d1 = (C.x-B.x)/(C.y-B.y);
+					
+					if(A.y > B.y) y = A.y;
+					else y = B.y;
+					x0 = A.x;
+					x1 = B.x;
+					while ( y <= C.y ) {
+					   for ( int x = x0; x <= x1; x++ )
+						  colorBuffer[(int)y][(int)x] = shadeTriangle(tris[i]);
+					   x0 += d0;
+					   x1 += d1;
+					   y++;
+					}
+					
+					if(A.y > B.y)
+						C = A;
+					else
+						C = B;
+						
+					if(A.y > B.y) y = A.y;
+					else y = B.y;
+					x0 = A.x;
+					x1 = B.x;
+					while ( y >= C.y ) {
+					   for ( int x = x0; x <= x1; x++ )
+						  colorBuffer[(int)y][(int)x] = shadeTriangle(tris[i]);
+					   x0 += d0;
+					   x1 += d1;
+					   y--;
+					}*/
+
+					static float dx0,dy0, dx1,dy1, dx2,dy2, incx0, incx1, incx2;
+					static float dy;
+					static float x1, x2, y, x;
+					
+					// choose right vertices
+					vector<Vertex4f> verts;
+					for(int k=0; k<3; k++)
+						verts.push_back(tris[i].v[k]);
+					Vertex4f a, b, c;
+					int sel=0;
+					for(int k=0; k<3; k++)
+						if(verts[k].pos.y > verts[sel].pos.y)
+							sel = k;
+					b = verts[sel];
+					verts.erase(verts.begin()+sel);
+					// choose a and c
+					if(verts[0].pos.x < verts[1].pos.x) {
+						a = verts[0];
+						c = verts[1];
+					}
+					else {
+						a = verts[0];
+						c = verts[1];
+					}
+					
+
+					dx0 = b.pos.x - a.pos.x;
+					dx1 = c.pos.x - b.pos.x;
+					dx2 = a.pos.x - c.pos.x;
+					
+					dy0 = b.pos.y - a.pos.y;
+					dy1 = b.pos.y - c.pos.y;
+					dy2 = a.pos.y - c.pos.y;
+					
+					if(dy2>0)
+						dy = dy0;
+					else
+						dy = dy1;
+					
+					incx0 = dx0/dy0;
+					incx1 = dx1/dy1;
+					incx2 = dx2/dy2;
+					
+					y = b.pos.y;
+					for(int k=0; k<dy; k++) {
+						x1 = b.pos.x + k*incx0;
+						x2 = b.pos.x + k*incx1;
+						y++;
+
+						colorBuffer[(int)y][(int)x1] = shadeTriangle(tris[i]);
+						colorBuffer[(int)y][(int)x2] = shadeTriangle(tris[i]);
+						//for(x=x1; x<x2; x++)
+							//colorBuffer[(int)y][(int)x] = shadeTriangle(tris[i]);
+					}
+				}
+				//break;
 			
+			case 2: 
+				// GL_POINT
+				for(int k=0; k<3; k++)
+					colorBuffer[(int)tris[i].v[k].pos.y][(int)tris[i].v[k].pos.x] = {1,1,1,1};//shadeTriangle(tris[i]);
+					
+				break;
+				
 			case 1:
 				{
 					int iter[] = { 0,1, 1,2, 2,0 };
 					// GL_LINE
 					for(int v=0; v<6; v+=2) {
-						static float dx, dy, incx, incy, actualX, actualY;
+						static float dx, dy, incx, incy;
 						
 						dx = tris[i].v[iter[v+1]].pos.x - tris[i].v[iter[v]].pos.x;
 						dy = tris[i].v[iter[v+1]].pos.y - tris[i].v[iter[v]].pos.y;
@@ -313,24 +432,12 @@ void rasterizeTriangles2d( vector<Triangle4f> tris )
 							incy = 1;
 							incx = dx/dy;
 						}
-						actualX = tris[i].v[iter[v]].pos.x;
-						actualY = tris[i].v[iter[v]].pos.y;
 						
 						for(int k=0; k < (dx>dy?dx:dy); k++) {
-							colorBuffer[(int)actualY][(int)actualX] = shadeTriangle(tris[i]);
-
-							actualX += incx;
-							actualY += incy;
+							colorBuffer[(int)(tris[i].v[iter[v]].pos.y + k*incy)][(int)(tris[i].v[iter[v]].pos.x + k*incx)] = shadeTriangle(tris[i]);
 						}
 					}
 				}				
-				break;
-			
-			case 2: 
-				// GL_POINT
-				for(int k=0; k<3; k++) {
-					colorBuffer[(int)tris[i].v[k].pos.y][(int)tris[i].v[k].pos.x] = shadeTriangle(tris[i]);
-				}
 				break;
 		}
 	}
@@ -391,6 +498,9 @@ void display2 () {
 	cout << "PM:" << endl;
 	pm.print();*/
 	
+		////////////////////////////////////////////////////////////////
+		////////////////////////////////////////////////////////////////
+		
 		vector<Triangle4f> tris = objTris;
 		
 		// Projects from WCS to View Volume
@@ -449,22 +559,19 @@ void display2 () {
 		else
 			tris = tempTris;
 		
-
+		// Perspective division and viewport mapping
 		for(unsigned int i=0; i<tris.size(); i++)
 			for(unsigned int vi=0; vi<3; vi++) {
-				// Perspective division				
 				tris[i].v[vi].pos = tris[i].v[vi].pos / tris[i].v[vi].pos.w;
 
-				// Map vertices to the Window
 				viewportMatrix.transformVector( &tris[i].v[vi].pos );
 			}
 			
-		// Do the 2D drawing
+		// Drawing on the screen
 		rasterizeTriangles2d(tris);
 		updateFrameBuffer();
-		//drawTriangles2d(tris);
-		//drawOsd();
 		
+		////////////////////////////////////////////////////////////////
 		////////////////////////////////////////////////////////////////
 		
 	glutSwapBuffers();

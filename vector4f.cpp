@@ -30,6 +30,11 @@ void vector4f::normalize( void )
     w = w / fLength;
 }
 
+vector3f vector4f::toVector3f()
+{
+	return vector3f(x,y,z);	
+}
+
 // Operators...
 
 vector4f vector4f::operator + ( const vector4f &other )

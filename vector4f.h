@@ -15,6 +15,8 @@
 
 #include <cmath>
 
+#include "vector3f.h"
+
 
 class vector4f
 {
@@ -37,11 +39,7 @@ class vector4f
 		void set(float x_, float y_, float z_, float w_);
 		float length(void);
 		void normalize(void);
-
-		// Static utility methods
-		static float distance(const vector4f &v1, const vector4f &v2);
-		static float dotProduct(const vector4f &v1,  const vector4f &v2 );
-		static vector4f crossProduct(const vector4f &v1, const vector4f &v2);
+		vector3f toVector3f();
 
 		// Operators...
 		vector4f operator + (const vector4f &other);
@@ -60,3 +58,8 @@ class vector4f
 		vector4f operator + (void) const;
 		vector4f operator - (void) const;
 };
+
+// Static utility methods
+float distance(const vector4f &v1, const vector4f &v2);
+float dotProduct(const vector4f &v1,  const vector4f &v2 );
+vector4f crossProduct(const vector4f &v1, const vector4f &v2);

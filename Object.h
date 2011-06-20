@@ -25,9 +25,9 @@ class Object
 				rot[3],		// rotation arguments on Rotatefs functions called on Draw
 				size[3];	// scale arguments on Scalefs functions called on Draw
 			
-		vector<Material>	materials;
+		Material			material;
 		vector<Triangle3f>	tris;
-		vector3f			forceColor;
+		float				forceColor[3];
 		
 		vector3f			maxPoint, minPoint, centerPoint;
 

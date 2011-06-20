@@ -21,11 +21,14 @@ struct rgbaf {
 	float r, g, b, a;
 };
 
+#define DEBUG_VAR(x) cout << #x << ": " << x << endl
+
+
 // GLOBALS ////////////////////////////////////////////////////////////
 
 #define 		OSD_LINES 2
-#define			WINDOWSX 0
-#define			WINDOWSY 0
+#define			WINDOWSX 100
+#define			WINDOWSY 300
 
 	
 float				bgColor[] = {0.2, 0.2, 0.2};
@@ -36,7 +39,7 @@ vector3f			cameraPos, cameraU, cameraV, cameraN;
 
 int					mainWindow, ninjaWindow;
 Object				object;
-int					*tex1, *tex2;
+unsigned char		*tex1, *tex2;
 int					tex1Id, tex2Id;
 vector<Triangle4f> 	objTris;
 //float 				**colorBuffer[4] /*R, G, B, A*/, **zBuffer;
@@ -54,8 +57,8 @@ static int	    left_click=GLUT_UP, right_click=GLUT_UP, middle_click=GLUT_UP;
 static bool     heldCtrl=false, heldShift=false;
 
 // GUI controlled
-float			fovy=60, fovx=60, clipNear=0.1, clipFar=3000;
-int				drawOpt=2, cameraMoveOpt, orientationOpt, shadeOpt=1;
+float			fovy=60, fovx=60, clipNear=0.7, clipFar=3000;
+int				drawOpt=1, cameraMoveOpt, orientationOpt, shadeOpt=1;
 int				enableLight0=1, enableRotLight=1, enableCulling=1, 
 				enableDrawNormals=0, enableDrawBoundingBox=0, enableColoredDraw=0,
 				enableLight=0;
@@ -69,6 +72,9 @@ void resetCamera( int nil=0 );
 void updateSettings( int nil=0 );
 void loadModel( int nil=0 );
 
+
+
+// UTILITY FUNCTIONS ///////////////////////////////////////////////////
 
 void** allocMatrix(int sizex, int sizey, int typeSize)
 {
@@ -86,7 +92,7 @@ inline float triangleArea( vector4f a, vector4f b, vector4f c )
 	return abs((b.x*a.y-a.x*b.y)+(c.x*b.y-b.x*c.y)+(a.x*c.y-c.x*a.y))/2;
 }
 
-int* loadJpg(const char* Name){
+unsigned char * loadJpg(const char* Name){
 // Taken from http://stackoverflow.com/questions/694080/how-do-i-read-jpeg-and-png-pixels-in-c-on-linux
         unsigned char a,r,g,b;
         int width, height;
@@ -141,7 +147,7 @@ int* loadJpg(const char* Name){
         (void) jpeg_finish_decompress(&cinfo);
         jpeg_destroy_decompress(&cinfo);
         
-        return (int*)pTest;
+        return pTest;
         
         // more info
         //int Height = height;
@@ -149,8 +155,9 @@ int* loadJpg(const char* Name){
         //int Depht = 32;
 }
 
-//Makes the image into a texture, and returns the id of the texture
-GLuint loadTexture(int* pixels, int w, int h) {
+GLuint loadTexture(unsigned char* pixels, int w, int h) {
+// Makes the image into a texture, and returns the id of the texture
+
         GLuint textureId;
         glGenTextures(1, &textureId); //Make room for our texture
         glBindTexture(GL_TEXTURE_2D, textureId); //Tell OpenGL which texture to edit
@@ -389,66 +396,141 @@ void rasterizeTriangles2d( vector<Triangle4f> tris )
 		switch(drawOpt) {
 			case 0:
 				{
-					Vertex4f a = tris[i].v[0];
-					Vertex4f b = tris[i].v[1];
-					Vertex4f c = tris[i].v[2];
+					static double dx0,dy0, dx1,dy1, dx2,dy2, incx0, incx1, incx2, newincxA, newincxB;
+					static double dy;
+					static double x1, x2, y, x;
+					static double xorigin;
+					static Vertex4f a, b, c, temp;
 					
-					float boxp1[2]={a.pos.x, a.pos.y},
-						  boxp2[2]={a.pos.x, a.pos.y};
-					for(int k=0; k<3; k++) {
-						if( tris[i].v[k].pos.x < boxp1[0] )
-							boxp1[0] = tris[i].v[k].pos.x;
-						if( tris[i].v[k].pos.y < boxp1[1] )
-							boxp1[1] = tris[i].v[k].pos.y;
-						if( tris[i].v[k].pos.x > boxp2[0] )
-							boxp2[0] = tris[i].v[k].pos.x;
-						if( tris[i].v[k].pos.y > boxp2[1] )
-							boxp2[1] = tris[i].v[k].pos.y;
+					// first, choose right vertices
+					vector<Vertex4f> verts;
+					for(int k=0; k<3; k++)
+							verts.push_back(tris[i].v[k]);
+					int sel=0;
+					for(int k=0; k<3; k++)
+							if(verts[k].pos.y > verts[sel].pos.y)
+									sel = k;
+					b = verts[sel];
+					verts.erase(verts.begin()+sel);
+					// choose a and c
+					if(verts[0].pos.x < verts[1].pos.x) {
+							a = verts[0];
+							c = verts[1];
 					}
-					for(int x=boxp1[0]; x<boxp2[0]; x++)
-						for(int y=boxp1[1]; y<boxp2[1]; y++) {
-							static float u,v,w;
-							static float area;
-							area = triangleArea(a.pos, b.pos, c.pos);
-							u = triangleArea( vector4f(x,y,0,0), b.pos, c.pos) / area;
-							v = triangleArea( a.pos, vector4f(x,y,0,0), c.pos) / area;
-							w = triangleArea( a.pos, b.pos, vector4f(x,y,0,0)) / area;
-							if(u+v+w <= 1) //inside triangle
-								colorBuffer[(int)y][(int)x] = shadeTriangle(tris[i]);
+					else {
+							a = verts[1];
+							c = verts[0];
 					}
+					
+					//set up variations
+					dx0 = b.pos.x - a.pos.x;
+					dx1 = c.pos.x - b.pos.x;
+					dx2 = a.pos.x - c.pos.x;
+					
+					dy0 = b.pos.y - a.pos.y;
+					dy1 = b.pos.y - c.pos.y;
+					dy2 = a.pos.y - c.pos.y;
+					
+					// Rasterize Phase 1 - top part
+					if(dy2>0) //a.y < c.y
+							dy = dy0;
+					else      //a.y < c.y
+							dy = dy1;
+					
+					incx0 = dx0/dy0;
+					incx1 = dx1/dy1;
+					incx2 = dx2/dy2;
+					
+					y = b.pos.y;
+					for(int k=0; k<dy; k++) {
+							x1 = b.pos.x - k*incx0;
+							x2 = b.pos.x + k*incx1;
+							y--;
+
+							if(x1<x2)
+								for(x=x1; x<x2; x++)
+									colorBuffer[(int)round(y)][(int)round(x)] = shadeTriangle(tris[i]);
+							else
+								for(x=x2; x<x1; x++)
+									colorBuffer[(int)round(y)][(int)round(x)] = shadeTriangle(tris[i]);
+					}
+					
+					// Rasterize Phase 2 - bottom part
+					if(dy2>0) { //a.y > c.y
+							dy = dy1 - dy0;
+							xorigin = c.pos.x-1;
+							y = c.pos.y;
+							newincxA = incx2;
+							newincxB = -incx1;
+					}
+					else { //a.y < c.y
+							dy = dy0 - dy1;
+							xorigin = a.pos.x;
+							y = a.pos.y;
+							newincxA = incx0;
+							newincxB = incx2;
+					}
+					for(int k=0; k<dy; k++) {
+							x1 = xorigin + k*newincxA;
+							x2 = xorigin + k*newincxB;
+							y++;
+
+							if(x1<x2)
+								for(x=x1; x<x2; x++)
+									colorBuffer[(int)round(y)][(int)round(x)] = shadeTriangle(tris[i]);
+							else
+								for(x=x2; x<x1; x++)
+									colorBuffer[(int)round(y)][(int)round(x)] = shadeTriangle(tris[i]);
+					}
+					
+					
+
 				}
 				break;
+			
+			case 1:
+				{
+					int iter[] = { 0,1, 1,2, 2,0 };
+					// GL_LINE
+					// this is a kinda smart bresenham
+					for(int v=0; v<6; v+=2) {
+						static float dx, dy, incx, incy, xlimit;
+						static Vertex4f a, b, temp;
+						
+						a = tris[i].v[iter[v]];
+						b = tris[i].v[iter[v+1]];
+						
+						if(a.pos.x > b.pos.x) {
+							temp = a;
+							a = b;
+							b = temp;
+						}
+						
+						dx = b.pos.x - a.pos.x;
+						dy = b.pos.y - a.pos.y;
+						if(dx > abs(dy)) {
+							incy = dy/dx;
+							incx = dx/abs(dx); //1
+							xlimit = dx;							
+						}
+						else {
+							incx = dx/abs(dy);
+							incy = dy/abs(dy); //1
+							xlimit = abs(dy);
+						}
+						
+						for(int k=0; k < xlimit; k++) {
+							colorBuffer[(int)(a.pos.y + k*incy)][(int)(a.pos.x + k*incx)] = shadeTriangle(tris[i]);
+						}
+					}
+				}				
+				break;			
 			
 			case 2: 
 				// GL_POINT
 				for(int k=0; k<3; k++)
 					colorBuffer[(int)tris[i].v[k].pos.y][(int)tris[i].v[k].pos.x] = shadeTriangle(tris[i]);
 					
-				break;
-				
-			case 1:
-				{
-					int iter[] = { 0,1, 1,2, 2,0 };
-					// GL_LINE
-					for(int v=0; v<6; v+=2) {
-						static float dx, dy, incx, incy;
-						
-						dx = tris[i].v[iter[v+1]].pos.x - tris[i].v[iter[v]].pos.x;
-						dy = tris[i].v[iter[v+1]].pos.y - tris[i].v[iter[v]].pos.y;
-						if(dx > dy) {
-							incx = 1;
-							incy = dy/dx;
-						}
-						else {
-							incy = 1;
-							incx = dx/dy;
-						}
-						
-						for(int k=0; k < (dx>dy?dx:dy); k++) {
-							colorBuffer[(int)(tris[i].v[iter[v]].pos.y + k*incy)][(int)(tris[i].v[iter[v]].pos.x + k*incx)] = shadeTriangle(tris[i]);
-						}
-					}
-				}				
 				break;
 		}
 	}
@@ -600,8 +682,6 @@ void initWorld()
 	tex1Id = loadTexture(tex1,256,256);
 	tex2Id = loadTexture(tex2,8,8);
 	
-	sprintf(fileName,"data/cow.in");
-	//sprintf(fileName,"data/cube.in");
 	loadModel();
 }
 
@@ -944,6 +1024,11 @@ void createGuiWindow()
 int main (int argc, char **argv) {
     cout << "Initializing...\n";
     
+    if(argc>1)
+		sprintf(fileName,"data/%s.in",argv[1]);
+	else
+		sprintf(fileName,"data/cow.in");
+		
     // OpenGL Window
     glutInit (&argc, argv);
     glutInitDisplayMode ( GLUT_DOUBLE | GLUT_RGB | GLUT_DEPTH );

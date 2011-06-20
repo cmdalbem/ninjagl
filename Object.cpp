@@ -95,16 +95,15 @@ int Object::readFromFile( string filename )
 	}
 	
 	char chasTex[8];
-	bool bhasTex;
 	fscanf(fp,"Texture = %s\n", chasTex);
-	bhasTex = (chasTex[0] == 'Y') ? true : false;
+	hasTex = (chasTex[0] == 'Y') ? true : false;
 	
 	// skip documentation line
 	fscanf(fp, "%c", &ch);
 	while(ch!= '\n')
 		fscanf(fp, "%c", &ch);
 	
-	printf ("Reading in %s (%d%s triangles)...\n", filename.c_str(), ntriangles, bhasTex?" texturized":"");
+	printf ("Reading in %s (%d%s triangles)...\n", filename.c_str(), ntriangles, hasTex?" texturized":"");
 	
 	// set size of triangles vector
 	tris.resize(ntriangles);
@@ -114,7 +113,7 @@ int Object::readFromFile( string filename )
 	minPoint = {9999,9999,9999};
 	for (int i=0; i<ntriangles; i++) {
 		int k = 0;
-			if(bhasTex)
+			if(hasTex)
 				fscanf(fp, "v0 %f %f %f %f %f %f %d %f %f\n",
 							&(tris[i].v[k].pos.x), &(tris[i].v[k].pos.y), &(tris[i].v[k].pos.z),
 							&(tris[i].v[k].normal.x), &(tris[i].v[k].normal.y), &(tris[i].v[k].normal.z), //ignored
@@ -134,7 +133,7 @@ int Object::readFromFile( string filename )
 			if(tris[i].v[k].pos.y < minPoint.y) minPoint.y = tris[i].v[k].pos.y;
 			if(tris[i].v[k].pos.z < minPoint.z) minPoint.z = tris[i].v[k].pos.z;
 		k = 1;
-			if(bhasTex)
+			if(hasTex)
 				fscanf(fp, "v1 %f %f %f %f %f %f %d %f %f\n",
 							&(tris[i].v[k].pos.x), &(tris[i].v[k].pos.y), &(tris[i].v[k].pos.z),
 							&(tris[i].v[k].normal.x), &(tris[i].v[k].normal.y), &(tris[i].v[k].normal.z), //ignored
@@ -154,7 +153,7 @@ int Object::readFromFile( string filename )
 			if(tris[i].v[k].pos.y < minPoint.y) minPoint.y = tris[i].v[k].pos.y;
 			if(tris[i].v[k].pos.z < minPoint.z) minPoint.z = tris[i].v[k].pos.z;
 		k = 2;
-			if(bhasTex)
+			if(hasTex)
 				fscanf(fp, "v2 %f %f %f %f %f %f %d %f %f\n",
 							&(tris[i].v[k].pos.x), &(tris[i].v[k].pos.y), &(tris[i].v[k].pos.z),
 							&(tris[i].v[k].normal.x), &(tris[i].v[k].normal.y), &(tris[i].v[k].normal.z), //ignored
@@ -225,6 +224,8 @@ void Object::draw( bool isColored ) const
 								tris[i].v[k].color[1],
 								tris[i].v[k].color[2]); 
 				glNormal3f(tris[i].v[k].normal.x, tris[i].v[k].normal.y, tris[i].v[k].normal.z); 
+				if(hasTex)
+					glTexCoord2f(tris[i].s, tris[i].t);
 				glVertex3f(tris[i].v[k].pos.x, tris[i].v[k].pos.y, tris[i].v[k].pos.z);
 			}
 		}

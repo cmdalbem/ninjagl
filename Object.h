@@ -28,6 +28,7 @@ class Object
 		Material			material;
 		vector<Triangle3f>	tris;
 		float				forceColor[3];
+		bool				hasTex;
 		
 		vector3f			maxPoint, minPoint, centerPoint;
 

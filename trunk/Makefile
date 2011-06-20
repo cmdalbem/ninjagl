@@ -6,7 +6,7 @@ OBJDIR = obj
 OBJNAMES = Object.o Material.o vector3f.o vector4f.o
 OBJS = $(addprefix $(OBJDIR)/,$(OBJNAMES))
 
-LIBS = -lGL -lglut -lGLU -lglui
+LIBS = -lGL -lglut -lGLU -lglui -ljpeg
 
 BIN = main
 

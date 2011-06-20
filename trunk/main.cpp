@@ -9,6 +9,8 @@
 #include <GL/gl.h>
 #include <GL/glut.h>
 
+#include <jpeglib.h>
+
 #include "Object.h"
 #include "constants.h"
 #include "matrix4x4f.h"
@@ -22,8 +24,8 @@ struct rgbaf {
 // GLOBALS ////////////////////////////////////////////////////////////
 
 #define 		OSD_LINES 2
-#define			WINDOWSX 100
-#define			WINDOWSY 300
+#define			WINDOWSX 0
+#define			WINDOWSY 0
 
 	
 float				bgColor[] = {0.2, 0.2, 0.2};
@@ -34,6 +36,8 @@ vector3f			cameraPos, cameraU, cameraV, cameraN;
 
 int					mainWindow, ninjaWindow;
 Object				object;
+int					*tex1, *tex2;
+int					tex1Id, tex2Id;
 vector<Triangle4f> 	objTris;
 //float 				**colorBuffer[4] /*R, G, B, A*/, **zBuffer;
 rgbaf 				colorBuffer[620][620];
@@ -82,6 +86,89 @@ inline float triangleArea( vector4f a, vector4f b, vector4f c )
 	return abs((b.x*a.y-a.x*b.y)+(c.x*b.y-b.x*c.y)+(a.x*c.y-c.x*a.y))/2;
 }
 
+int* loadJpg(const char* Name){
+// Taken from http://stackoverflow.com/questions/694080/how-do-i-read-jpeg-and-png-pixels-in-c-on-linux
+        unsigned char a,r,g,b;
+        int width, height;
+        struct jpeg_decompress_struct cinfo;
+        struct jpeg_error_mgr jerr;
+
+        FILE * infile;        /* source file */
+        JSAMPARRAY pJpegBuffer;       /* Output row buffer */
+        int row_stride;       /* physical row width in output buffer */
+        if ((infile = fopen(Name, "rb")) == NULL)
+        {
+                fprintf(stderr, "can't open %s\n", Name);
+                return 0;
+        }
+        cinfo.err = jpeg_std_error(&jerr);
+        jpeg_create_decompress(&cinfo);
+        jpeg_stdio_src(&cinfo, infile);
+        (void) jpeg_read_header(&cinfo, TRUE);
+        (void) jpeg_start_decompress(&cinfo);
+        width = cinfo.output_width;
+        height = cinfo.output_height;
+
+        unsigned char * pDummy = new unsigned char [width*height*4];
+        unsigned char * pTest=pDummy;
+        if (!pDummy){
+                printf("NO MEM FOR JPEG CONVERT!\n");
+                return 0;
+        }
+        row_stride = width * cinfo.output_components ;
+        pJpegBuffer = (*cinfo.mem->alloc_sarray)
+                ((j_common_ptr) &cinfo, JPOOL_IMAGE, row_stride, 1);
+        while (cinfo.output_scanline < cinfo.output_height) {
+                (void) jpeg_read_scanlines(&cinfo, pJpegBuffer, 1);
+                for (int x=0;x<width;x++) {
+                        a = 0; // alpha value is not supported on jpg
+                        r = pJpegBuffer[0][cinfo.output_components*x];
+                        if (cinfo.output_components>2)
+                        {
+                                g = pJpegBuffer[0][cinfo.output_components*x+1];
+                                b = pJpegBuffer[0][cinfo.output_components*x+2];
+                        } else {
+                                g = r;
+                                b = r;
+                        }
+                        *(pDummy++) = b;
+                        *(pDummy++) = g;
+                        *(pDummy++) = r;
+                        *(pDummy++) = a;
+                }
+        }
+        fclose(infile);
+        (void) jpeg_finish_decompress(&cinfo);
+        jpeg_destroy_decompress(&cinfo);
+        
+        return (int*)pTest;
+        
+        // more info
+        //int Height = height;
+        //int Width = width;
+        //int Depht = 32;
+}
+
+//Makes the image into a texture, and returns the id of the texture
+GLuint loadTexture(int* pixels, int w, int h) {
+        GLuint textureId;
+        glGenTextures(1, &textureId); //Make room for our texture
+        glBindTexture(GL_TEXTURE_2D, textureId); //Tell OpenGL which texture to edit
+        //Map the image to the texture
+        glTexImage2D(GL_TEXTURE_2D,                //Always GL_TEXTURE_2D
+                                 0,                            //0 for now
+                                 GL_RGB,                       //Format OpenGL uses for image
+                                 w, h,  //Width and height
+                                 0,                            //The border of the image
+                                 GL_RGB, //GL_RGB, because pixels are stored in RGB format
+                                 GL_UNSIGNED_BYTE, //GL_UNSIGNED_BYTE, because pixels are stored
+                                                   //as unsigned numbers
+                                 pixels);               //The actual pixel data
+        return textureId; //Returns the id of the texture
+}
+
+
+
 
 // OPENGL //////////////////////////////////////////////////////////////
 
@@ -93,7 +180,7 @@ void drawObjects()
 		case 1:	glPolygonMode( GL_FRONT_AND_BACK, GL_LINE ); break;
 		case 2:	glPolygonMode( GL_FRONT_AND_BACK, GL_POINT ); break;
 	}
-	
+	glBindTexture(GL_TEXTURE_2D, tex1Id);
 	if(enableColoredDraw) {
 		for(int i=0; i<3; i++)
 			object.forceColor[i] = forceColor[i];
@@ -508,6 +595,11 @@ void display2 () {
 
 void initWorld()
 {
+	tex1 = loadJpg("data/mandrill_256.jpg");
+	tex2 = loadJpg("data/checker_8x8.jpg");
+	tex1Id = loadTexture(tex1,256,256);
+	tex2Id = loadTexture(tex2,8,8);
+	
 	sprintf(fileName,"data/cow.in");
 	//sprintf(fileName,"data/cube.in");
 	loadModel();
@@ -563,7 +655,7 @@ void initLights () {
 		glLightfv(GL_LIGHT0, GL_SPECULAR, light0.specular);
 	}
 	
-	/*{
+	{
 		// rotating light
 		GLfloat ambientLight[] = { 0.0, 0.0, 0.0, 1.0f };
 		GLfloat diffuseLight[] = { 0.5f, 0.5f, 0.5f, 1.0f };
@@ -573,7 +665,7 @@ void initLights () {
 		glLightfv(GL_LIGHT1, GL_SPECULAR, specularLight);
 		glLightf(GL_LIGHT1, GL_CONSTANT_ATTENUATION, 0.2);
 		glLightf(GL_LIGHT1, GL_LINEAR_ATTENUATION, 0.001);
-	}*/
+	}
 }
 
 void initGL2()
@@ -601,6 +693,7 @@ void initGL()
 	glEnable(GL_NORMALIZE);		//normalizes all normals
     glEnable(GL_COLOR_MATERIAL);
     glEnable(GL_DEPTH_TEST);
+    glEnable(GL_TEXTURE_2D);
 
 	updateSettings();
 }

@@ -26,9 +26,9 @@ struct rgbaf {
 
 // GLOBALS ////////////////////////////////////////////////////////////
 
-#define 		OSD_LINES 2
-#define			WINDOWSX 100
-#define			WINDOWSY 300
+#define 			OSD_LINES 2
+#define				WINDOWSX 100
+#define				WINDOWSY 300
 
 	
 float				bgColor[] = {0.2, 0.2, 0.2};
@@ -49,21 +49,21 @@ float				zBuffer[620][620];
 // Light
 Material			light0;
 vector4f			light0Pos;
-float				ambientLight[4] = {0.1, 0.1, 0.1, 1.0f};
+float				ambientLight[4];
 
 // Mouse-Keyboard
-static int      xold, yold;		
-static int	    left_click=GLUT_UP, right_click=GLUT_UP, middle_click=GLUT_UP;
-static bool     heldCtrl=false, heldShift=false;
+static int      	xold, yold;		
+static int	    	left_click=GLUT_UP, right_click=GLUT_UP, middle_click=GLUT_UP;
+static bool     	heldCtrl=false, heldShift=false;
 
 // GUI controlled
-float			fovy=60, fovx=60, clipNear=0.7, clipFar=3000;
-int				drawOpt=1, cameraMoveOpt, orientationOpt, shadeOpt=1;
-int				enableLight0=1, enableRotLight=1, enableCulling=1, 
-				enableDrawNormals=0, enableDrawBoundingBox=0, enableColoredDraw=0,
-				enableLight=0;
-float			forceColor[] = {1,1,1};
-char			fileName[256];
+float				fovy=60, fovx=60, clipNear=1, clipFar=3000;
+int					drawOpt=1, cameraMoveOpt, orientationOpt, shadeOpt=1;
+int					enableLight0=1, enableRotLight=1, enableCulling=1, 
+					enableDrawNormals=0, enableDrawBoundingBox=0, enableColoredDraw=0,
+					enableLight=1;
+float				forceColor[] = {1,1,1};
+char				fileName[256];
 
 
 // PROTOTYPES //////////////////////////////////////////////////////////
@@ -75,6 +75,14 @@ void loadModel( int nil=0 );
 
 
 // UTILITY FUNCTIONS ///////////////////////////////////////////////////
+
+void updateWindows()
+{
+	glutSetWindow(ninjaWindow);
+	glutPostRedisplay();
+	glutSetWindow(mainWindow);
+	glutPostRedisplay();
+}
 
 void** allocMatrix(int sizex, int sizey, int typeSize)
 {
@@ -266,7 +274,6 @@ void display () {
 		drawObjects();
 	
 	glutSwapBuffers();
-	glutPostRedisplay();
 	frameCounter++;
 }
 
@@ -341,14 +348,38 @@ void updateFrameBuffer()
 	glDrawPixels(width, height, GL_RGBA, GL_FLOAT, colorBuffer);
 }
 
+inline void calculateColors( Vertex4f *v )
+{
+	float phong;
+	Material mat = object.material;
+	
+	for(int c=0; c<3; c++) {	
+		phong = 0;
+		phong = ambientLight[c] * mat.ambient[c];
+
+		if(enableLight0) {
+			// diffuse
+			static vector4f l = light0Pos - v->pos;
+			l.normalize();
+			phong += light0.diffuse[c] * mat.diffuse[c] * dotProduct( v->normal, l );
+			
+			// specular
+			static vector3f r = l.toVector3f();
+			static matrix4x4f temp;
+			temp.rotate(180, v->normal.toVector3f());
+			//temp.transformVector(&r);
+			static vector3f view = v->pos.toVector3f() - cameraPos;
+			view.normalize();
+			//DEBUG_VAR(dotProduct( view, r ));
+			phong += light0.specular[c] * mat.specular[c] * pow(dotProduct( view, r ), mat.shininess);
+		}
+		
+		v->color[c] = phong;
+	}
+}
+
 inline rgbaf shadeTriangle( Triangle4f tri )
 {
-	/*
-	switch(shadeOpt) {
-		case 0: glShadeModel(GL_SMOOTH); break;
-		case 1: glShadeModel(GL_FLAT); break;
-	}*/
-	
 	if(enableColoredDraw)
 		return {forceColor[0],
 				forceColor[1],
@@ -360,45 +391,53 @@ inline rgbaf shadeTriangle( Triangle4f tri )
 				tri.v[0].color[1],
 				tri.v[0].color[2],
 				1 };
-	/*else {
-		
-		Material mat = object.material;
-		rgbaf phong;
-
-		phong = ambientLight[i] * mat.ambient[i];
-		//cout << ambientLight[i] * mat.ambient[i] << endl;
-		if(enableLight0) {
-			// diffuse
-			static vector4f l = v.pos - light0Pos;
-			phong += light0.diffuse[i] * mat.diffuse[i] * dotProduct( n, l );
-			
-			// specular
-			/*static vector3f r = l.toVector3f();
-			static matrix4x4f temp;
-			temp.rotate(180, n.toVector3f());
-			temp.transformVector(&r);
-			phong += light0.specular[i] * mat.specular[i] * pow(dotProduct( v.pos.toVector3f() - cameraPos, r ),mat.shininess);*/
-		/*}
-			
-		return phong;
-	}*/
 }
+
+inline rgbaf interpol2Colors( float color1[3], float color2[3], int p )
+{
+	return { p*color1[0] + (1-p)*color2[0],
+			p*color1[1] + (1-p)*color2[1],
+			p*color1[2] + (1-p)*color2[2],
+			1 };
+}
+
+inline float interpol2Depth( vector4f pos1, vector4f pos2, int p )
+{
+	return p*pos1.z + (1-p)*pos2.z;
+}
+
+inline bool testZBuffer( int x, int y, int z )
+{
+//	DEBUG_VAR(z);
+	
+	if( zBuffer[x][y] < z ) {
+		zBuffer[x][y] = z;
+		return true;
+	}
+	else	
+		return true;
+}
+	
 
 void rasterizeTriangles2d( vector<Triangle4f> tris )
 {
-	/*switch(drawOpt) {
-		case 0:	glPolygonMode( GL_FRONT_AND_BACK, GL_FILL ); break;
-		case 1:	glPolygonMode( GL_FRONT_AND_BACK, GL_LINE ); break;
-		case 2:	glPolygonMode( GL_FRONT_AND_BACK, GL_POINT ); break;
+	/*
+	switch(shadeOpt) {
+		case 0: glShadeModel(GL_SMOOTH); break;
+		case 1: glShadeModel(GL_FLAT); break;
 	}*/
+	
 
 	for(unsigned int i=0; i<tris.size(); i++) {
+		static int rasterx, rastery;
+		
 		switch(drawOpt) {
 			case 0:
+			// GL_FILL
 				{
 					static double dx0,dy0, dx1,dy1, dx2,dy2, incx0, incx1, incx2, newincxA, newincxB;
 					static double dy;
-					static double x1, x2, y, x;
+					static double x1, x2, y, x, limit1, limit2;
 					static double xorigin;
 					static Vertex4f a, b, c, temp;
 					
@@ -447,12 +486,22 @@ void rasterizeTriangles2d( vector<Triangle4f> tris )
 							x2 = b.pos.x + k*incx1;
 							y--;
 
-							if(x1<x2)
-								for(x=x1; x<x2; x++)
-									colorBuffer[(int)round(y)][(int)round(x)] = shadeTriangle(tris[i]);
-							else
-								for(x=x2; x<x1; x++)
-									colorBuffer[(int)round(y)][(int)round(x)] = shadeTriangle(tris[i]);
+							if(x1<x2) {
+								limit1 = x1;
+								limit2 = x2;
+							}
+							else {
+								limit1 = x2;
+								limit2 = x1;
+							}
+							
+							for(x=limit1; x<limit2; x++) {
+								rasterx = (int)round(x);
+								rastery = (int)round(y);
+								
+								if( testZBuffer( rasterx, rastery, 1000.*interpol2Depth(a.pos, b.pos, (float)k/dy)) )
+									colorBuffer[rastery][rasterx] = interpol2Colors(a.color, c.color, (float)k/dy);
+							}
 					}
 					
 					// Rasterize Phase 2 - bottom part
@@ -475,12 +524,17 @@ void rasterizeTriangles2d( vector<Triangle4f> tris )
 							x2 = xorigin + k*newincxB;
 							y++;
 
-							if(x1<x2)
-								for(x=x1; x<x2; x++)
-									colorBuffer[(int)round(y)][(int)round(x)] = shadeTriangle(tris[i]);
-							else
-								for(x=x2; x<x1; x++)
-									colorBuffer[(int)round(y)][(int)round(x)] = shadeTriangle(tris[i]);
+							if(x1<x2) {
+								limit1 = x1;
+								limit2 = x2;
+							}
+							else {
+								limit1 = x2;
+								limit2 = x1;
+							}
+							
+							for(x=limit1; x<limit2; x++)
+								colorBuffer[(int)round(y)][(int)round(x)] = interpol2Colors(a.color, c.color, (float)k/dy);
 					}
 					
 					
@@ -520,17 +574,39 @@ void rasterizeTriangles2d( vector<Triangle4f> tris )
 						}
 						
 						for(int k=0; k < xlimit; k++) {
-							colorBuffer[(int)(a.pos.y + k*incy)][(int)(a.pos.x + k*incx)] = shadeTriangle(tris[i]);
+							//static vector4f triCenter = (tris[i].v[0].pos+tris[i].v[1].pos+tris[i].v[2].pos)/3;
+							rasterx = (int)(a.pos.x + k*incx);
+							rastery = (int)(a.pos.y + k*incy);
+						
+							if(enableColoredDraw)
+								colorBuffer[rastery][rasterx] = {forceColor[0],forceColor[1],forceColor[2],1};							
+							else {
+								colorBuffer[rastery][rasterx] = interpol2Colors(a.color, b.color, (float)k/xlimit);
+							}
 						}
 					}
 				}				
 				break;			
 			
-			case 2: 
-				// GL_POINT
-				for(int k=0; k<3; k++)
-					colorBuffer[(int)tris[i].v[k].pos.y][(int)tris[i].v[k].pos.x] = shadeTriangle(tris[i]);
-					
+			case 2:  {
+					// GL_POINT					
+					for(int k=0; k<3; k++) {
+						rasterx = tris[i].v[k].pos.x;
+						rastery = tris[i].v[k].pos.y;
+						
+						if(enableColoredDraw)
+							colorBuffer[rastery][rasterx] = {forceColor[0],forceColor[1],forceColor[2],1};
+						
+						else if(!enableLight)
+							colorBuffer[rastery][rasterx] = {tris[i].v[k].color[0],tris[i].v[k].color[1],tris[i].v[k].color[2],1};
+						
+						else {
+							colorBuffer[rastery][rasterx].r = tris[i].v[0].color[0];
+							colorBuffer[rastery][rasterx].g = tris[i].v[0].color[1];
+							colorBuffer[rastery][rasterx].b = tris[i].v[0].color[2];
+						}
+					}
+				}
 				break;
 		}
 	}
@@ -575,7 +651,6 @@ void clearBuffers()
 void display2 () {
 // The NinjaGL Display Function
 	
-	//glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 	clearBuffers();
 	
 	// updates the Model/View Matrix with actual camera settings
@@ -601,6 +676,7 @@ void display2 () {
 			for(unsigned int vi=0; vi<3; vi++) {
 				//pm.transformVector( &tris[i].v[vi].pos );
 				modelviewMatrix.transformVector( &tris[i].v[vi].pos );
+				calculateColors( &tris[i].v[vi] );
 				projectionMatrix.transformVector( &tris[i].v[vi].pos );
 				
 				//printf("v%i:\t%.3f\t%.3f\t%.3f\t%.3f\n",vi, tris[i].v[vi].pos.x,tris[i].v[vi].pos.y,tris[i].v[vi].pos.z-cameraPos.z,tris[i].v[vi].pos.w);
@@ -668,7 +744,6 @@ void display2 () {
 		////////////////////////////////////////////////////////////////
 		
 	glutSwapBuffers();
-	glutPostRedisplay();
 	frameCounter2++;
 }
 
@@ -677,8 +752,12 @@ void display2 () {
 
 void initWorld()
 {
+	updateSettings();
+	
 	tex1 = loadJpg("data/mandrill_256.jpg");
 	tex2 = loadJpg("data/checker_8x8.jpg");
+	
+	glutSetWindow(ninjaWindow);
 	tex1Id = loadTexture(tex1,256,256);
 	tex2Id = loadTexture(tex2,8,8);
 	
@@ -722,6 +801,7 @@ void initLights () {
 	light0Pos = vector4f(pos[0], pos[1], pos[2], 0);
 	
 	// ambient light
+	ambientLight = {0., 0., 0., 1.0f};
 	glLightModelfv(GL_LIGHT_MODEL_AMBIENT, ambientLight);
 	
 	{
@@ -737,14 +817,14 @@ void initLights () {
 	
 	{
 		// rotating light
-		GLfloat ambientLight[] = { 0.0, 0.0, 0.0, 1.0f };
+		/*GLfloat ambientLight[] = { 0.0, 0.0, 0.0, 1.0f };
 		GLfloat diffuseLight[] = { 0.5f, 0.5f, 0.5f, 1.0f };
 		GLfloat specularLight[] = { 0.8f, 0.8f, 0.8f, 1.0f };
 		glLightfv(GL_LIGHT1, GL_AMBIENT, ambientLight);
 		glLightfv(GL_LIGHT1, GL_DIFFUSE, diffuseLight);
 		glLightfv(GL_LIGHT1, GL_SPECULAR, specularLight);
 		glLightf(GL_LIGHT1, GL_CONSTANT_ATTENUATION, 0.2);
-		glLightf(GL_LIGHT1, GL_LINEAR_ATTENUATION, 0.001);
+		glLightf(GL_LIGHT1, GL_LINEAR_ATTENUATION, 0.001);*/
 	}
 }
 
@@ -761,8 +841,6 @@ void initGL2()
 
 	
 	glEnable(GL_NORMALIZE);
-
-	//updateSettings();
 }
 
 void initGL()
@@ -774,8 +852,6 @@ void initGL()
     glEnable(GL_COLOR_MATERIAL);
     glEnable(GL_DEPTH_TEST);
     glEnable(GL_TEXTURE_2D);
-
-	updateSettings();
 }
 
 void keyboardFunc (unsigned char key, int x, int y) {
@@ -832,6 +908,7 @@ void specialFunc(int key, int x, int y)
 		}
 	}
 	
+	updateWindows();
 }
 
 void mouseFunc(int button, int state, int x, int y) {
@@ -858,6 +935,8 @@ void mouseFunc(int button, int state, int x, int y) {
 		
 	xold = x;
 	yold = y;
+	
+	updateWindows();
 }
 
 void mouseMotionFunc(int x, int y) {
@@ -898,6 +977,8 @@ void mouseMotionFunc(int x, int y) {
 
 	xold = x;
 	yold = y;
+	
+	updateWindows();
 }
 
 void updateFPS(int value) {
@@ -939,6 +1020,8 @@ void resetCamera( int nil )
 	z = z1>z2 ? z1 : z2;
 	
 	cameraPos.z = z + object.maxPoint.z*object.size[2] + object.pos[2];
+	
+	updateWindows();
 }	
 
 void callReshape( int nil )
@@ -966,6 +1049,59 @@ void updateSettings( int nil )
 		case 0: glFrontFace(GL_CW); break;
 		case 1: glFrontFace(GL_CCW); break;
 	}
+	
+	updateWindows();
+}
+
+void resetMaterialToDefault( int nil=0 )
+{
+	object.material = object.defaultMaterial;
+	GLUI_Master.sync_live_all();
+	
+	updateWindows();
+}
+
+void createMaterialGuiWindow( int nil=0 )
+{
+	GLUI *glui = GLUI_Master.create_glui("Model material");
+/*
+			float ambient[3],
+			diffuse[3],
+			specular[3],
+			shininess;
+			* */
+			
+	GLUI_Panel *p1 = glui->add_panel("Ambient");
+		GLUI_Spinner *p1SpinR = glui->add_spinner_to_panel( p1, "R:", GLUI_SPINNER_FLOAT, &object.material.ambient[0] );
+			p1SpinR->set_float_limits( 0., 1., GLUI_LIMIT_CLAMP );
+		GLUI_Spinner *p1SpinG = glui->add_spinner_to_panel( p1, "G:", GLUI_SPINNER_FLOAT, &object.material.ambient[1] );
+			p1SpinG->set_float_limits( 0., 1., GLUI_LIMIT_CLAMP );
+		GLUI_Spinner *p1SpinB = glui->add_spinner_to_panel( p1, "B:", GLUI_SPINNER_FLOAT, &object.material.ambient[2] );
+			p1SpinB->set_float_limits( 0., 1., GLUI_LIMIT_CLAMP );
+	
+	GLUI_Panel *p2 = glui->add_panel("Diffuse");
+		GLUI_Spinner *p2SpinR = glui->add_spinner_to_panel( p2, "R:", GLUI_SPINNER_FLOAT, &object.material.diffuse[0] );
+			p2SpinR->set_float_limits( 0., 1., GLUI_LIMIT_CLAMP );
+		GLUI_Spinner *p2SpinG = glui->add_spinner_to_panel( p2, "G:", GLUI_SPINNER_FLOAT, &object.material.diffuse[1] );
+			p2SpinG->set_float_limits( 0., 1., GLUI_LIMIT_CLAMP );
+		GLUI_Spinner *p2SpinB = glui->add_spinner_to_panel( p2, "B:", GLUI_SPINNER_FLOAT, &object.material.diffuse[2] );
+			p2SpinB->set_float_limits( 0., 1., GLUI_LIMIT_CLAMP );	
+	
+	GLUI_Panel *p3 = glui->add_panel("Specular");
+		GLUI_Spinner *p3SpinR = glui->add_spinner_to_panel( p3, "R:", GLUI_SPINNER_FLOAT, &object.material.specular[0] );
+			p3SpinR->set_float_limits( 0., 1., GLUI_LIMIT_CLAMP );
+		GLUI_Spinner *p3SpinG = glui->add_spinner_to_panel( p3, "G:", GLUI_SPINNER_FLOAT, &object.material.specular[1] );
+			p3SpinG->set_float_limits( 0., 1., GLUI_LIMIT_CLAMP );
+		GLUI_Spinner *p3SpinB = glui->add_spinner_to_panel( p3, "B:", GLUI_SPINNER_FLOAT, &object.material.specular[2] );
+			p3SpinB->set_float_limits( 0., 1., GLUI_LIMIT_CLAMP );	
+	
+	GLUI_Panel *p4 = glui->add_panel("Shininess");
+		GLUI_Spinner *p4Spin = glui->add_spinner_to_panel( p4, "Value: ", GLUI_SPINNER_FLOAT, &object.material.shininess);
+			p4Spin->set_float_limits( 0., 1., GLUI_LIMIT_CLAMP );	
+	
+	glui->add_button( "Reset to default", 0, resetMaterialToDefault );
+	//glui->add_button( "OK", 0, glui->close );
+
 }
 
 void createGuiWindow()
@@ -1002,6 +1138,8 @@ void createGuiWindow()
 					gSpin->set_float_limits( 0., 1., GLUI_LIMIT_CLAMP );
 				GLUI_Spinner *bSpin = glui->add_spinner_to_panel( mpc, "B:", GLUI_SPINNER_FLOAT, &forceColor[2] );
 					bSpin->set_float_limits( 0., 1., GLUI_LIMIT_CLAMP );
+				glui->add_checkbox_to_panel( mp, "Draw Bounding Box", &enableDrawBoundingBox );
+		glui->add_button_to_panel( mp, "Material settings", 0, createMaterialGuiWindow );
 	
 	//glui->add_column(false);
 

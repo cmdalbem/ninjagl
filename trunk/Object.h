@@ -25,7 +25,7 @@ class Object
 				rot[3],		// rotation arguments on Rotatefs functions called on Draw
 				size[3];	// scale arguments on Scalefs functions called on Draw
 			
-		Material			material;
+		Material			material, defaultMaterial;
 		vector<Triangle3f>	tris;
 		float				forceColor[3];
 		bool				hasTex;

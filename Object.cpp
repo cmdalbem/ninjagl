@@ -93,6 +93,7 @@ int Object::readFromFile( string filename )
 		fscanf(fp, "specular color %f %f %f\n", &(material.specular[0]), &(material.specular[1]), &(material.specular[2]));
 		fscanf(fp, "material shine %f\n", &(material.shininess));
 	}
+	defaultMaterial = material;
 	
 	char chasTex[8];
 	fscanf(fp,"Texture = %s\n", chasTex);

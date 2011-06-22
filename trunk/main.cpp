@@ -602,7 +602,7 @@ void rasterizeTriangles2d( vector<Triangle4f> tris )
 								limit2 = x1;
 							}
 							
-							for(x=x1; x<x2; x++) {
+							for(x=limit1; x<limit2; x++) {
 								rasterx = (int)round(x);
 								rastery = (int)round(y);
 								

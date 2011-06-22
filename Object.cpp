@@ -7,6 +7,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string>
+#include <float.h>
 
 #include "constants.h"
 #include "Object.h"
@@ -110,8 +111,8 @@ int Object::readFromFile( string filename )
 	tris.resize(ntriangles);
 	
 	// read triangles
-	maxPoint = {-9999,-9999,-9999};
-	minPoint = {9999,9999,9999};
+	maxPoint = {FLT_MIN+1, FLT_MIN+1, FLT_MIN+1};
+	minPoint = {FLT_MAX-1, FLT_MAX-1, FLT_MAX-1};
 	for (int i=0; i<ntriangles; i++) {
 		int k = 0;
 			if(hasTex)

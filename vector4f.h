@@ -60,6 +60,6 @@ class vector4f
 };
 
 // Static utility methods
-float distance(const vector4f &v1, const vector4f &v2);
+float distanceV(const vector4f &v1, const vector4f &v2);
 float dotProduct(const vector4f &v1,  const vector4f &v2 );
 vector4f crossProduct(const vector4f &v1, const vector4f &v2);

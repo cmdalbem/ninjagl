@@ -166,7 +166,7 @@ vector4f& vector4f::operator -= ( const vector4f &other )
 
 // Static utility methods...
 
-float distance( const vector4f &v1,  const vector4f &v2  )
+float distanceV( const vector4f &v1,  const vector4f &v2  )
 {
     float dx = v1.x - v2.x;
     float dy = v1.y - v2.y;

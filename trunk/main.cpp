@@ -4,6 +4,7 @@
 #include <math.h>
 #include <vector>
 #include <string.h>
+#include <limits.h>
 
 #include <GL/glui.h>
 #include <GL/gl.h>
@@ -47,6 +48,7 @@ rgbaf 				colorBuffer[620][620];
 float				zBuffer[620][620];
 
 // Light
+float 				lightAtt1, lightAtt2, lightAtt3;
 Material			light0;
 vector4f			light0Pos;
 float				ambientLight[4];
@@ -57,7 +59,7 @@ static int	    	left_click=GLUT_UP, right_click=GLUT_UP, middle_click=GLUT_UP;
 static bool     	heldCtrl=false, heldShift=false;
 
 // GUI controlled
-float				fovy=60, fovx=60, clipNear=1, clipFar=3000;
+float				fovy=60, fovx=60, clipNear=10, clipFar=3000;
 int					drawOpt=1, cameraMoveOpt, orientationOpt, shadeOpt=1;
 int					enableLight0=1, enableRotLight=1, enableCulling=1, 
 					enableDrawNormals=0, enableDrawBoundingBox=0, enableColoredDraw=0,
@@ -76,7 +78,7 @@ void loadModel( int nil=0 );
 
 // UTILITY FUNCTIONS ///////////////////////////////////////////////////
 
-void updateWindows()
+void updateWindows( int nil=0 )
 {
 	glutSetWindow(ninjaWindow);
 	glutPostRedisplay();
@@ -350,28 +352,42 @@ void updateFrameBuffer()
 
 inline void calculateColors( Vertex4f *v )
 {
-	float phong;
+	float phong, att, d;
 	Material mat = object.material;
+	vector4f n = v->normal;
+	//n.normalize();
 	
 	for(int c=0; c<3; c++) {	
 		phong = 0;
 		phong = ambientLight[c] * mat.ambient[c];
 
 		if(enableLight0) {
-			// diffuse
-			static vector4f l = light0Pos - v->pos;
-			l.normalize();
-			phong += light0.diffuse[c] * mat.diffuse[c] * dotProduct( v->normal, l );
+			static vector4f l, r;
+			static vector3f view;
+			static float dotDif, dotSpec;
 			
-			// specular
-			static vector3f r = l.toVector3f();
-			static matrix4x4f temp;
-			temp.rotate(180, v->normal.toVector3f());
-			//temp.transformVector(&r);
-			static vector3f view = v->pos.toVector3f() - cameraPos;
-			view.normalize();
-			//DEBUG_VAR(dotProduct( view, r ));
-			phong += light0.specular[c] * mat.specular[c] * pow(dotProduct( view, r ), mat.shininess);
+			// attenuation calc
+			d = distanceV(light0Pos, v->pos);
+			att = 1./(lightAtt1 + d*lightAtt2 + d*d*lightAtt3);
+			if( att > 1 )
+				att = 1;
+			
+			// diffuse
+			l = light0Pos - v->pos;
+			l.normalize();
+			dotDif = dotProduct( n, l );
+			if(dotDif>0) {
+				phong += att * light0.diffuse[c] * mat.diffuse[c] * dotDif;
+				
+				// specular
+				r = 2*dotProduct(n,l)*n - l;
+				r.normalize();
+				view = cameraPos - v->pos.toVector3f();
+				view.normalize();
+				dotSpec = 2.23*dotProduct( view, r.toVector3f() );
+				if(dotSpec>0)
+					phong += att * light0.specular[c] * mat.specular[c] * pow(dotSpec, mat.shininess);
+			}
 		}
 		
 		v->color[c] = phong;
@@ -393,29 +409,59 @@ inline rgbaf shadeTriangle( Triangle4f tri )
 				1 };
 }
 
-inline rgbaf interpol2Colors( float color1[3], float color2[3], int p )
+inline rgbaf interpol2Colors( float r1, float g1, float b1, float r2, float g2, float b2, float p )
 {
-	return { p*color1[0] + (1-p)*color2[0],
-			p*color1[1] + (1-p)*color2[1],
-			p*color1[2] + (1-p)*color2[2],
+	return { p*r1 + (1-p)*r2,
+			p*g1 + (1-p)*g2,
+			p*b1 + (1-p)*b2,
 			1 };
 }
 
-inline float interpol2Depth( vector4f pos1, vector4f pos2, int p )
+inline rgbaf interpol2Colors( float color1[3], float color2[3], float p )
 {
-	return p*pos1.z + (1-p)*pos2.z;
+	return interpol2Colors(color1[0], color1[1], color1[2],
+							color2[0], color2[1], color2[2], p);
 }
 
-inline bool testZBuffer( int x, int y, int z )
+inline rgbaf interpol2Colors( rgbaf color1, rgbaf color2, float p )
 {
-//	DEBUG_VAR(z);
+	return interpol2Colors( color1.r,color1.g,color1.b, 
+							color2.r,color2.g,color2.b, p );
+}
+
+inline float interpol2Depth( float z1, float z2, float p )
+{
+	return p*z1 + (1-p)*z2;
+}
+
+inline rgbaf middle3Color( float c1[3], float c2[3], float c3[3] )
+{
+	return { (c1[0] + c2[0] + c3[0])/3,
+			(c1[1] + c2[1] + c3[1])/3,
+			(c1[2] + c2[2]+ c3[2])/3,
+			1};
+}
+
+inline rgbaf middle3Color( rgbaf c1, rgbaf c2, rgbaf c3 )
+{
+	return { (c1.r + c2.r + c3.r)/3,
+			(c1.g + c2.g + c3.g)/3,
+			(c1.b + c2.b + c3.b)/3,
+			1};
+}
+
+inline bool testZBuffer( int x, int y, float z )
+{
+	// gambi!
+	z = z*1000;
+	//DEBUG_VAR(z);
 	
-	if( zBuffer[x][y] < z ) {
+	if( zBuffer[x][y] > z ) {
 		zBuffer[x][y] = z;
 		return true;
 	}
 	else	
-		return true;
+		return false;
 }
 	
 
@@ -425,8 +471,7 @@ void rasterizeTriangles2d( vector<Triangle4f> tris )
 	switch(shadeOpt) {
 		case 0: glShadeModel(GL_SMOOTH); break;
 		case 1: glShadeModel(GL_FLAT); break;
-	}*/
-	
+	}*/	
 
 	for(unsigned int i=0; i<tris.size(); i++) {
 		static int rasterx, rastery;
@@ -439,7 +484,9 @@ void rasterizeTriangles2d( vector<Triangle4f> tris )
 					static double dy;
 					static double x1, x2, y, x, limit1, limit2;
 					static double xorigin;
-					static Vertex4f a, b, c, temp;
+					static Vertex4f a, b, c, temp, bottom, left, right;
+					static rgbaf color1, color2;
+					static float depth1, depth2;
 					
 					// first, choose right vertices
 					vector<Vertex4f> verts;
@@ -485,7 +532,14 @@ void rasterizeTriangles2d( vector<Triangle4f> tris )
 							x1 = b.pos.x - k*incx0;
 							x2 = b.pos.x + k*incx1;
 							y--;
-
+							
+							if(shadeOpt==0) { //gourad
+								color1 = interpol2Colors(b.color, a.color, (float)k/dy);
+								color2 = interpol2Colors(b.color, c.color, (float)k/dy);
+							}
+							depth1 = interpol2Depth(b.pos.z, a.pos.z, (float)k/dy);
+							depth2 = interpol2Depth(b.pos.z, c.pos.z, (float)k/dy);
+							
 							if(x1<x2) {
 								limit1 = x1;
 								limit2 = x2;
@@ -499,31 +553,46 @@ void rasterizeTriangles2d( vector<Triangle4f> tris )
 								rasterx = (int)round(x);
 								rastery = (int)round(y);
 								
-								if( testZBuffer( rasterx, rastery, 1000.*interpol2Depth(a.pos, b.pos, (float)k/dy)) )
-									colorBuffer[rastery][rasterx] = interpol2Colors(a.color, c.color, (float)k/dy);
+								if( testZBuffer( rasterx, rastery, interpol2Depth(depth1, depth2, (float)(x-limit1)/(limit2-limit1))) ) {
+									if(shadeOpt==0) //gourad
+										colorBuffer[rastery][rasterx] = interpol2Colors(color1, color2, (float)(x-limit1)/(limit2-limit1));
+									else
+										colorBuffer[rastery][rasterx] = middle3Color(a.color,b.color,c.color);
+								}
 							}
 					}
 					
 					// Rasterize Phase 2 - bottom part
 					if(dy2>0) { //a.y > c.y
 							dy = dy1 - dy0;
-							xorigin = c.pos.x-1;
-							y = c.pos.y;
 							newincxA = incx2;
 							newincxB = -incx1;
+							bottom = c;
+							left = a;
+							right = b;
 					}
 					else { //a.y < c.y
 							dy = dy0 - dy1;
-							xorigin = a.pos.x;
-							y = a.pos.y;
 							newincxA = incx0;
 							newincxB = incx2;
+							bottom = a;
+							left = b;
+							right = c;
 					}
+					xorigin = bottom.pos.x;
+					y = bottom.pos.y;
 					for(int k=0; k<dy; k++) {
 							x1 = xorigin + k*newincxA;
 							x2 = xorigin + k*newincxB;
 							y++;
 
+							if(shadeOpt==0) { //gourad
+								color1 = interpol2Colors(bottom.color, left.color, (float)k/dy);
+								color2 = interpol2Colors(bottom.color, right.color, (float)k/dy);
+							}
+							depth1 = interpol2Depth(bottom.pos.z, left.pos.z, (float)k/dy);
+							depth2 = interpol2Depth(bottom.pos.z, right.pos.z, (float)k/dy);
+							
 							if(x1<x2) {
 								limit1 = x1;
 								limit2 = x2;
@@ -533,8 +602,17 @@ void rasterizeTriangles2d( vector<Triangle4f> tris )
 								limit2 = x1;
 							}
 							
-							for(x=limit1; x<limit2; x++)
-								colorBuffer[(int)round(y)][(int)round(x)] = interpol2Colors(a.color, c.color, (float)k/dy);
+							for(x=x1; x<x2; x++) {
+								rasterx = (int)round(x);
+								rastery = (int)round(y);
+								
+								if( testZBuffer( rasterx, rastery, interpol2Depth(depth1, depth2, (float)(x-limit1)/(limit2-limit1))) ) {
+									if(shadeOpt==0) //gourad
+										colorBuffer[rastery][rasterx] = interpol2Colors(color1, color2, (float)(x-limit1)/(limit2-limit1));
+									else
+										colorBuffer[rastery][rasterx] = middle3Color(a.color,b.color,c.color);
+								}
+							}
 					}
 					
 					
@@ -574,14 +652,15 @@ void rasterizeTriangles2d( vector<Triangle4f> tris )
 						}
 						
 						for(int k=0; k < xlimit; k++) {
-							//static vector4f triCenter = (tris[i].v[0].pos+tris[i].v[1].pos+tris[i].v[2].pos)/3;
 							rasterx = (int)(a.pos.x + k*incx);
 							rastery = (int)(a.pos.y + k*incy);
 						
-							if(enableColoredDraw)
-								colorBuffer[rastery][rasterx] = {forceColor[0],forceColor[1],forceColor[2],1};							
-							else {
-								colorBuffer[rastery][rasterx] = interpol2Colors(a.color, b.color, (float)k/xlimit);
+							if( testZBuffer( rasterx, rastery, interpol2Depth(a.pos.z, b.pos.z, (float)k/dy)) ) {
+								if(enableColoredDraw)
+									colorBuffer[rastery][rasterx] = {forceColor[0],forceColor[1],forceColor[2],1};							
+								else {
+									colorBuffer[rastery][rasterx] = interpol2Colors(a.color, b.color, (float)k/xlimit);
+								}
 							}
 						}
 					}
@@ -639,7 +718,7 @@ void clearBuffers()
 {
 	for(int i=0; i<width; i++)
 		for(int k=0; k<height; k++) {
-			zBuffer[i][k] = 0;
+			zBuffer[i][k] = INT_MAX-1;
 			colorBuffer[i][k].r = bgColor[0];
 			colorBuffer[i][k].g = bgColor[1];
 			colorBuffer[i][k].b = bgColor[2];
@@ -813,6 +892,14 @@ void initLights () {
 		glLightfv(GL_LIGHT0, GL_AMBIENT, light0.ambient);
 		glLightfv(GL_LIGHT0, GL_DIFFUSE, light0.diffuse);
 		glLightfv(GL_LIGHT0, GL_SPECULAR, light0.specular);
+		
+		lightAtt1 = 0.2;
+		lightAtt2 = 0.001;
+		lightAtt3 = 0.0;
+		
+		glLightf( GL_LIGHT0, GL_CONSTANT_ATTENUATION, lightAtt1 );	
+		glLightf( GL_LIGHT0, GL_LINEAR_ATTENUATION , lightAtt2 );	
+		glLightf( GL_LIGHT0, GL_QUADRATIC_ATTENUATION , lightAtt3 );
 	}
 	
 	{
@@ -1064,44 +1151,37 @@ void resetMaterialToDefault( int nil=0 )
 void createMaterialGuiWindow( int nil=0 )
 {
 	GLUI *glui = GLUI_Master.create_glui("Model material");
-/*
-			float ambient[3],
-			diffuse[3],
-			specular[3],
-			shininess;
-			* */
-			
+
 	GLUI_Panel *p1 = glui->add_panel("Ambient");
-		GLUI_Spinner *p1SpinR = glui->add_spinner_to_panel( p1, "R:", GLUI_SPINNER_FLOAT, &object.material.ambient[0] );
+		GLUI_Spinner *p1SpinR = glui->add_spinner_to_panel( p1, "R:", GLUI_SPINNER_FLOAT, &object.material.ambient[0], 0, updateWindows );
 			p1SpinR->set_float_limits( 0., 1., GLUI_LIMIT_CLAMP );
-		GLUI_Spinner *p1SpinG = glui->add_spinner_to_panel( p1, "G:", GLUI_SPINNER_FLOAT, &object.material.ambient[1] );
+		GLUI_Spinner *p1SpinG = glui->add_spinner_to_panel( p1, "G:", GLUI_SPINNER_FLOAT, &object.material.ambient[1], 0, updateWindows );
 			p1SpinG->set_float_limits( 0., 1., GLUI_LIMIT_CLAMP );
-		GLUI_Spinner *p1SpinB = glui->add_spinner_to_panel( p1, "B:", GLUI_SPINNER_FLOAT, &object.material.ambient[2] );
+		GLUI_Spinner *p1SpinB = glui->add_spinner_to_panel( p1, "B:", GLUI_SPINNER_FLOAT, &object.material.ambient[2], 0, updateWindows );
 			p1SpinB->set_float_limits( 0., 1., GLUI_LIMIT_CLAMP );
 	
 	GLUI_Panel *p2 = glui->add_panel("Diffuse");
-		GLUI_Spinner *p2SpinR = glui->add_spinner_to_panel( p2, "R:", GLUI_SPINNER_FLOAT, &object.material.diffuse[0] );
+		GLUI_Spinner *p2SpinR = glui->add_spinner_to_panel( p2, "R:", GLUI_SPINNER_FLOAT, &object.material.diffuse[0], 0, updateWindows );
 			p2SpinR->set_float_limits( 0., 1., GLUI_LIMIT_CLAMP );
-		GLUI_Spinner *p2SpinG = glui->add_spinner_to_panel( p2, "G:", GLUI_SPINNER_FLOAT, &object.material.diffuse[1] );
+		GLUI_Spinner *p2SpinG = glui->add_spinner_to_panel( p2, "G:", GLUI_SPINNER_FLOAT, &object.material.diffuse[1], 0, updateWindows );
 			p2SpinG->set_float_limits( 0., 1., GLUI_LIMIT_CLAMP );
-		GLUI_Spinner *p2SpinB = glui->add_spinner_to_panel( p2, "B:", GLUI_SPINNER_FLOAT, &object.material.diffuse[2] );
+		GLUI_Spinner *p2SpinB = glui->add_spinner_to_panel( p2, "B:", GLUI_SPINNER_FLOAT, &object.material.diffuse[2], 0, updateWindows );
 			p2SpinB->set_float_limits( 0., 1., GLUI_LIMIT_CLAMP );	
 	
 	GLUI_Panel *p3 = glui->add_panel("Specular");
-		GLUI_Spinner *p3SpinR = glui->add_spinner_to_panel( p3, "R:", GLUI_SPINNER_FLOAT, &object.material.specular[0] );
+		GLUI_Spinner *p3SpinR = glui->add_spinner_to_panel( p3, "R:", GLUI_SPINNER_FLOAT, &object.material.specular[0], 0, updateWindows );
 			p3SpinR->set_float_limits( 0., 1., GLUI_LIMIT_CLAMP );
-		GLUI_Spinner *p3SpinG = glui->add_spinner_to_panel( p3, "G:", GLUI_SPINNER_FLOAT, &object.material.specular[1] );
+		GLUI_Spinner *p3SpinG = glui->add_spinner_to_panel( p3, "G:", GLUI_SPINNER_FLOAT, &object.material.specular[1], 0, updateWindows );
 			p3SpinG->set_float_limits( 0., 1., GLUI_LIMIT_CLAMP );
-		GLUI_Spinner *p3SpinB = glui->add_spinner_to_panel( p3, "B:", GLUI_SPINNER_FLOAT, &object.material.specular[2] );
+		GLUI_Spinner *p3SpinB = glui->add_spinner_to_panel( p3, "B:", GLUI_SPINNER_FLOAT, &object.material.specular[2], 0, updateWindows );
 			p3SpinB->set_float_limits( 0., 1., GLUI_LIMIT_CLAMP );	
 	
 	GLUI_Panel *p4 = glui->add_panel("Shininess");
-		GLUI_Spinner *p4Spin = glui->add_spinner_to_panel( p4, "Value: ", GLUI_SPINNER_FLOAT, &object.material.shininess);
-			p4Spin->set_float_limits( 0., 1., GLUI_LIMIT_CLAMP );	
+		GLUI_Spinner *p4Spin = glui->add_spinner_to_panel( p4, "Value: ", GLUI_SPINNER_FLOAT, &object.material.shininess, 0, updateWindows);
+			//p4Spin->set_float_limits( 0., 1., GLUI_LIMIT_CLAMP );	
 	
 	glui->add_button( "Reset to default", 0, resetMaterialToDefault );
 	//glui->add_button( "OK", 0, glui->close );
-
 }
 
 void createGuiWindow()

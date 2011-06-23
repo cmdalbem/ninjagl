@@ -42,6 +42,8 @@ struct Triangle4f
 	
 
 // Macros
+#define DEBUG_VAR(x) cout << #x << ": " << x << endl
+
 #define RGB(x) (float)(x)/(255)
 #define PRINTVAR(x) cout << #x << " = " << x << endl
 #define RAD(x) ((x)*(M_PI))/(180.)

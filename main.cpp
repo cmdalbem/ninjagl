@@ -22,9 +22,6 @@ struct rgbaf {
 	float r, g, b, a;
 };
 
-#define DEBUG_VAR(x) cout << #x << ": " << x << endl
-
-
 // GLOBALS ////////////////////////////////////////////////////////////
 
 #define 			OSD_LINES 2
@@ -35,17 +32,18 @@ struct rgbaf {
 float				bgColor[] = {0.2, 0.2, 0.2};
 long int			frameCounter, frameCounter2, fps, fps2;
 char 				osd[OSD_LINES][256], osd2[OSD_LINES][256];
-int					width=620, height=620;
+#define				width 600
+#define				height 600
 vector3f			cameraPos, cameraU, cameraV, cameraN;
 
 int					mainWindow, ninjaWindow;
 Object				object;
-unsigned char		*tex1, *tex2;
+char				*tex1, *tex2;
 int					tex1Id, tex2Id;
 vector<Triangle4f> 	objTris;
 //float 				**colorBuffer[4] /*R, G, B, A*/, **zBuffer;
-rgbaf 				colorBuffer[620][620];
-float				zBuffer[620][620];
+rgbaf 				colorBuffer[width][height];
+double				zBuffer[width][height];
 
 // Light
 float 				lightAtt1, lightAtt2, lightAtt3;
@@ -102,10 +100,10 @@ inline float triangleArea( vector4f a, vector4f b, vector4f c )
 	return abs((b.x*a.y-a.x*b.y)+(c.x*b.y-b.x*c.y)+(a.x*c.y-c.x*a.y))/2;
 }
 
-unsigned char * loadJpg(const char* Name){
+char * loadJpg(const char* Name){
 // Taken from http://stackoverflow.com/questions/694080/how-do-i-read-jpeg-and-png-pixels-in-c-on-linux
         unsigned char a,r,g,b;
-        int width, height;
+        int picwidth, picheight;
         struct jpeg_decompress_struct cinfo;
         struct jpeg_error_mgr jerr;
 
@@ -122,11 +120,11 @@ unsigned char * loadJpg(const char* Name){
         jpeg_stdio_src(&cinfo, infile);
         (void) jpeg_read_header(&cinfo, TRUE);
         (void) jpeg_start_decompress(&cinfo);
-        width = cinfo.output_width;
-        height = cinfo.output_height;
-
-        unsigned char * pDummy = new unsigned char [width*height*4];
-        unsigned char * pTest=pDummy;
+        picwidth = cinfo.output_width;
+        picheight = cinfo.output_height;
+        
+        char * pDummy = new char [width*height*4];
+        char * pTest=pDummy;
         if (!pDummy){
                 printf("NO MEM FOR JPEG CONVERT!\n");
                 return 0;
@@ -165,12 +163,19 @@ unsigned char * loadJpg(const char* Name){
         //int Depht = 32;
 }
 
-GLuint loadTexture(unsigned char* pixels, int w, int h) {
+GLuint loadTexture(char* pixels, int w, int h) {
 // Makes the image into a texture, and returns the id of the texture
 
         GLuint textureId;
+        
+        glutSetWindow(mainWindow);
+        glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
         glGenTextures(1, &textureId); //Make room for our texture
         glBindTexture(GL_TEXTURE_2D, textureId); //Tell OpenGL which texture to edit
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+
         //Map the image to the texture
         glTexImage2D(GL_TEXTURE_2D,                //Always GL_TEXTURE_2D
                                  0,                            //0 for now
@@ -180,7 +185,11 @@ GLuint loadTexture(unsigned char* pixels, int w, int h) {
                                  GL_RGB, //GL_RGB, because pixels are stored in RGB format
                                  GL_UNSIGNED_BYTE, //GL_UNSIGNED_BYTE, because pixels are stored
                                                    //as unsigned numbers
-                                 pixels);               //The actual pixel data
+                                 pixels);          //The actual pixel data
+                                 
+        //gluBuild2DMipmaps(GL_TEXTURE_2D, GL_RGB, <tex_width>, <tex_height>, GL_RGB, GL_UNSIGNED_BYTE, <texture>);
+		glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
+        
         return textureId; //Returns the id of the texture
 }
 
@@ -197,7 +206,10 @@ void drawObjects()
 		case 1:	glPolygonMode( GL_FRONT_AND_BACK, GL_LINE ); break;
 		case 2:	glPolygonMode( GL_FRONT_AND_BACK, GL_POINT ); break;
 	}
-	glBindTexture(GL_TEXTURE_2D, tex1Id);
+	if(object.hasTex) {
+			glutSetWindow(mainWindow);
+			glBindTexture(GL_TEXTURE_2D, tex1Id);
+		}
 	if(enableColoredDraw) {
 		for(int i=0; i<3; i++)
 			object.forceColor[i] = forceColor[i];
@@ -249,8 +261,8 @@ void reshape(int w, int h) {
 	
 	glutSetWindow(mainWindow);
 	
-	width = w;
-	height = h;
+	//width = w;
+	//height = h;
 	
 	glViewport(0, 0, (GLsizei) width, (GLsizei) height);
 	
@@ -282,7 +294,7 @@ void display () {
 
 // NINJAGL /////////////////////////////////////////////////////////////
 
-matrix4x4f modelviewMatrix, projectionMatrix, viewportMatrix;
+matrix4x4f modelMatrix, viewMatrix, modelviewMatrix, projectionMatrix, viewportMatrix;
 
 
 void updateModelviewMatrix()
@@ -292,6 +304,24 @@ void updateModelviewMatrix()
     m->m[1]=cameraV.x;	m->m[5]=cameraV.y;	m->m[9]=cameraV.z;		m->m[13]=-dotProduct(cameraPos,cameraV);
     m->m[2]=-cameraN.x;	m->m[6]=-cameraN.y;	m->m[10]=-cameraN.z;	m->m[14]=dotProduct(cameraPos,cameraN);
     m->m[3]=0; 			m->m[7]=0; 			m->m[11]=0;				m->m[15]=1;	
+}
+
+void updateModelMatrix()
+{
+	matrix4x4f *m = &modelMatrix;
+	m->m[0]=cameraU.x;	m->m[4]=cameraU.y;	m->m[8]=cameraU.z;		m->m[12]=0;
+    m->m[1]=cameraV.x;	m->m[5]=cameraV.y;	m->m[9]=cameraV.z;		m->m[13]=0;
+    m->m[2]=-cameraN.x;	m->m[6]=-cameraN.y;	m->m[10]=-cameraN.z;	m->m[14]=0;
+    m->m[3]=0; 			m->m[7]=0; 			m->m[11]=0;				m->m[15]=1;	
+}
+
+void updateViewMatrix()
+{
+	matrix4x4f *m = &viewMatrix;
+	m->m[0]=1;	m->m[4]=0;	m->m[8]=0;		m->m[12]=-cameraPos.x;
+    m->m[1]=0;	m->m[5]=1;	m->m[9]=0;		m->m[13]=-cameraPos.y;
+    m->m[2]=0;	m->m[6]=0;	m->m[10]=1;		m->m[14]=-cameraPos.z;
+    m->m[3]=0; 	m->m[7]=0; 	m->m[11]=0;		m->m[15]=1;	
 }
 
 void updateProjectionMatrix()
@@ -325,8 +355,8 @@ void reshape2(int w, int h) {
 	
 	glutSetWindow(ninjaWindow);
 	
-	width = w;
-	height = h;
+	//width = w;
+	//height = h;
 	
 	//colorBuffer = (rgbaf**) allocMatrix(w,h,sizeof(rgbaf));
 	//zBuffer = (float**) allocMatrix(w,h,sizeof(float));
@@ -366,6 +396,9 @@ inline void calculateColors( Vertex4f *v )
 			static vector3f view;
 			static float dotDif, dotSpec;
 			
+			// ambient
+			phong += light0.ambient[c] * mat.ambient[c];
+
 			// attenuation calc
 			d = distanceV(light0Pos, v->pos);
 			att = 1./(lightAtt1 + d*lightAtt2 + d*d*lightAtt3);
@@ -384,7 +417,7 @@ inline void calculateColors( Vertex4f *v )
 				r.normalize();
 				view = cameraPos - v->pos.toVector3f();
 				view.normalize();
-				dotSpec = 2.23*dotProduct( view, r.toVector3f() );
+				dotSpec = 2.2*dotProduct( view, r.toVector3f() );
 				if(dotSpec>0)
 					phong += att * light0.specular[c] * mat.specular[c] * pow(dotSpec, mat.shininess);
 			}
@@ -392,21 +425,6 @@ inline void calculateColors( Vertex4f *v )
 		
 		v->color[c] = phong;
 	}
-}
-
-inline rgbaf shadeTriangle( Triangle4f tri )
-{
-	if(enableColoredDraw)
-		return {forceColor[0],
-				forceColor[1],
-				forceColor[2],
-				1 };
-	
-	else if(!enableLight)
-		return {tri.v[0].color[0],
-				tri.v[0].color[1],
-				tri.v[0].color[2],
-				1 };
 }
 
 inline rgbaf interpol2Colors( float r1, float g1, float b1, float r2, float g2, float b2, float p )
@@ -431,7 +449,7 @@ inline rgbaf interpol2Colors( rgbaf color1, rgbaf color2, float p )
 
 inline float interpol2Depth( float z1, float z2, float p )
 {
-	return p*z1 + (1-p)*z2;
+	return (1-p)*z1 + p*z2;
 }
 
 inline rgbaf middle3Color( float c1[3], float c2[3], float c3[3] )
@@ -452,10 +470,6 @@ inline rgbaf middle3Color( rgbaf c1, rgbaf c2, rgbaf c3 )
 
 inline bool testZBuffer( int x, int y, float z )
 {
-	// gambi!
-	z = z*1000;
-	//DEBUG_VAR(z);
-	
 	if( zBuffer[x][y] > z ) {
 		zBuffer[x][y] = z;
 		return true;
@@ -659,7 +673,10 @@ void rasterizeTriangles2d( vector<Triangle4f> tris )
 								if(enableColoredDraw)
 									colorBuffer[rastery][rasterx] = {forceColor[0],forceColor[1],forceColor[2],1};							
 								else {
-									colorBuffer[rastery][rasterx] = interpol2Colors(a.color, b.color, (float)k/xlimit);
+									if(shadeOpt==0) //gourad
+										colorBuffer[rastery][rasterx] = interpol2Colors(a.color, b.color, (float)k/xlimit);
+									else
+										colorBuffer[rastery][rasterx] = middle3Color(tris[i].v[0].color,tris[i].v[1].color,tris[i].v[2].color);
 								}
 							}
 						}
@@ -733,7 +750,9 @@ void display2 () {
 	clearBuffers();
 	
 	// updates the Model/View Matrix with actual camera settings
-	updateModelviewMatrix();
+	//updateModelviewMatrix();
+	updateViewMatrix();
+	updateModelMatrix();
 		
 	// compute P*M
 	//matrix4x4f pm = projectionMatrix * modelviewMatrix;
@@ -754,8 +773,11 @@ void display2 () {
 		for(unsigned int i=0; i<tris.size(); i++)
 			for(unsigned int vi=0; vi<3; vi++) {
 				//pm.transformVector( &tris[i].v[vi].pos );
-				modelviewMatrix.transformVector( &tris[i].v[vi].pos );
-				calculateColors( &tris[i].v[vi] );
+				//modelviewMatrix.transformVector( &tris[i].v[vi].pos );
+				viewMatrix.transformVector( &tris[i].v[vi].pos );
+				if(enableLight)
+					calculateColors( &tris[i].v[vi] );
+				modelMatrix.transformVector( &tris[i].v[vi].pos );
 				projectionMatrix.transformVector( &tris[i].v[vi].pos );
 				
 				//printf("v%i:\t%.3f\t%.3f\t%.3f\t%.3f\n",vi, tris[i].v[vi].pos.x,tris[i].v[vi].pos.y,tris[i].v[vi].pos.z-cameraPos.z,tris[i].v[vi].pos.w);
@@ -836,9 +858,8 @@ void initWorld()
 	tex1 = loadJpg("data/mandrill_256.jpg");
 	tex2 = loadJpg("data/checker_8x8.jpg");
 	
-	glutSetWindow(ninjaWindow);
 	tex1Id = loadTexture(tex1,256,256);
-	tex2Id = loadTexture(tex2,8,8);
+	tex2Id = loadTexture(tex2,256,256);
 	
 	loadModel();
 }
@@ -846,6 +867,9 @@ void initWorld()
 void loadModel( int nil )
 {
 	object = Object(fileName);
+	
+	object.texIds.push_back(tex1Id);
+	object.texIds.push_back(tex2Id);
 
 	objTris.resize( object.tris.size() );
 	for(unsigned int i=0; i<object.tris.size(); i++)
@@ -885,7 +909,7 @@ void initLights () {
 	
 	{
 		// fixed light
-		light0.setAmbient( 0.0, 0.0, 0.0 );
+		light0.setAmbient( 0.5, 0.5, 0.5 );
 		light0.setDiffuse( 0.8f, 0.8f, 0.8f );
 		light0.setSpecular( 1.f, 1.f, 1.f );
 						   
@@ -893,9 +917,10 @@ void initLights () {
 		glLightfv(GL_LIGHT0, GL_DIFFUSE, light0.diffuse);
 		glLightfv(GL_LIGHT0, GL_SPECULAR, light0.specular);
 		
-		lightAtt1 = 0.2;
-		lightAtt2 = 0.001;
-		lightAtt3 = 0.0;
+		//default values
+		lightAtt1 = 1;
+		lightAtt2 = 0.;
+		lightAtt3 = 0.;
 		
 		glLightf( GL_LIGHT0, GL_CONSTANT_ATTENUATION, lightAtt1 );	
 		glLightf( GL_LIGHT0, GL_LINEAR_ATTENUATION , lightAtt2 );	
@@ -937,8 +962,15 @@ void initGL()
 	
 	glEnable(GL_NORMALIZE);		//normalizes all normals
     glEnable(GL_COLOR_MATERIAL);
+    glHint(GL_PERSPECTIVE_CORRECTION_HINT, GL_NICEST);
     glEnable(GL_DEPTH_TEST);
     glEnable(GL_TEXTURE_2D);
+    
+	tex1 = loadJpg("data/mandrill_256.jpg");
+	tex2 = loadJpg("data/checker_8x8.jpg");
+	
+	tex1Id = loadTexture(tex1,256,256);
+	tex2Id = loadTexture(tex2,256,256);
 }
 
 void keyboardFunc (unsigned char key, int x, int y) {
@@ -1022,6 +1054,8 @@ void mouseFunc(int button, int state, int x, int y) {
 		
 	xold = x;
 	yold = y;
+	
+	//printf("%.10lf\n",zBuffer[x][620-y]); //print value of the zBuffer on that point
 	
 	updateWindows();
 }
@@ -1150,7 +1184,7 @@ void resetMaterialToDefault( int nil=0 )
 
 void createMaterialGuiWindow( int nil=0 )
 {
-	GLUI *glui = GLUI_Master.create_glui("Model material");
+	GLUI *glui = GLUI_Master.create_glui("Material");
 
 	GLUI_Panel *p1 = glui->add_panel("Ambient");
 		GLUI_Spinner *p1SpinR = glui->add_spinner_to_panel( p1, "R:", GLUI_SPINNER_FLOAT, &object.material.ambient[0], 0, updateWindows );
@@ -1186,7 +1220,7 @@ void createMaterialGuiWindow( int nil=0 )
 
 void createGuiWindow()
 {
-	GLUI *glui = GLUI_Master.create_glui("GUI",0,WINDOWSX+width+10,WINDOWSY);
+	GLUI *glui = GLUI_Master.create_glui("",0,WINDOWSX+width+10,WINDOWSY);
 
 	GLUI_Panel *lp = glui->add_panel("World");
 		glui->add_checkbox_to_panel( lp, "Enable Lighting", &enableLight, 0, updateSettings );

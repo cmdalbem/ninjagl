@@ -26,9 +26,11 @@ class Object
 				size[3];	// scale arguments on Scalefs functions called on Draw
 			
 		Material			material, defaultMaterial;
+		vector<Material>	materials;
 		vector<Triangle3f>	tris;
 		float				forceColor[3];
 		bool				hasTex;
+		vector<int>			texIds;
 		
 		vector3f			maxPoint, minPoint, centerPoint;
 

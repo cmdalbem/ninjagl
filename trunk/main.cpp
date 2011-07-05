@@ -33,8 +33,8 @@ struct rgbaf {
 float				bgColor[] = {0.2, 0.2, 0.2};
 long int			frameCounter, frameCounter2, fps, fps2;
 char 				osd[OSD_LINES][256], osd2[OSD_LINES][256];
-int					width=300;
-int					height=300;
+int					width=400;
+int					height=400;
 vector3f			cameraPos, cameraU, cameraV, cameraN;
 
 int					mainWindow, ninjaWindow;
@@ -415,7 +415,7 @@ void reshape2(int w, int h) {
 	updateViewportMatrix(0., width, 0., height); //same params of gluOrtho2D
 }
 
-void updateFrameBuffer()
+void drawColorBuffer()
 {
 	glutSetWindow(ninjaWindow);
 	glDrawPixels(width, height, GL_RGBA, GL_FLOAT, colorBuffer);
@@ -594,7 +594,7 @@ void rasterizeTriangles2d( vector<Triangle4f> tris )
 					incx2 = dx2/dy2;
 					
 					y = b.pos.y;
-					for(int k=0; k<dy; k++) {
+					for(int k=0; k<=dy; k++) {
 							x1 = b.pos.x - k*incx0;
 							x2 = b.pos.x + k*incx1;
 							y--;
@@ -615,7 +615,7 @@ void rasterizeTriangles2d( vector<Triangle4f> tris )
 								limit2 = x1;
 							}
 							
-							for(x=limit1; x<limit2; x++) {
+							for(x=limit1; x<=limit2; x++) {
 								rasterx = (int)round(x);
 								rastery = (int)round(y);
 								
@@ -649,7 +649,7 @@ void rasterizeTriangles2d( vector<Triangle4f> tris )
 					}
 					xorigin = bottom.pos.x;
 					y = bottom.pos.y;
-					for(int k=0; k<dy; k++) {
+					for(int k=0; k<=dy; k++) {
 							x1 = xorigin + k*newincxA;
 							x2 = xorigin + k*newincxB;
 							y++;
@@ -670,7 +670,7 @@ void rasterizeTriangles2d( vector<Triangle4f> tris )
 								limit2 = x1;
 							}
 							
-							for(x=limit1; x<limit2; x++) {
+							for(x=limit1; x<=limit2; x++) {
 								rasterx = (int)round(x);
 								rastery = (int)round(y);
 								
@@ -822,8 +822,6 @@ void display2 () {
 		// Projects from WCS to View Volume
 		for(unsigned int i=0; i<tris.size(); i++)
 			for(unsigned int vi=0; vi<3; vi++) {
-				//pm.transformVector( &tris[i].v[vi].pos );
-				//modelviewMatrix.transformVector( &tris[i].v[vi].pos );
 				viewMatrix.transformVector( &tris[i].v[vi].pos );
 				if(enableLight)
 					calculateColors( &tris[i].v[vi] );
@@ -889,10 +887,11 @@ void display2 () {
 			
 		// Drawing on the screen
 		rasterizeTriangles2d(tris);
-		updateFrameBuffer();
+		drawColorBuffer();
 		
 		////////////////////////////////////////////////////////////////
 		////////////////////////////////////////////////////////////////
+		
 		
 	glutSwapBuffers();
 	frameCounter2++;
@@ -1312,7 +1311,6 @@ void createGuiWindow()
 					gSpin->set_float_limits( 0., 1., GLUI_LIMIT_CLAMP );
 				GLUI_Spinner *bSpin = glui->add_spinner_to_panel( mpc, "B:", GLUI_SPINNER_FLOAT, &forceColor[2] );
 					bSpin->set_float_limits( 0., 1., GLUI_LIMIT_CLAMP );
-				glui->add_checkbox_to_panel( mp, "Draw Bounding Box", &enableDrawBoundingBox );
 		glui->add_button_to_panel( mp, "Material settings", 0, createMaterialGuiWindow );
 	
 	//glui->add_column(false);

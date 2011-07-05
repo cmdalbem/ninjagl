@@ -33,8 +33,8 @@ struct rgbaf {
 float				bgColor[] = {0.2, 0.2, 0.2};
 long int			frameCounter, frameCounter2, fps, fps2;
 char 				osd[OSD_LINES][256], osd2[OSD_LINES][256];
-int					width=600;
-int					height=600;
+int					width=300;
+int					height=300;
 vector3f			cameraPos, cameraU, cameraV, cameraN;
 
 int					mainWindow, ninjaWindow;
@@ -42,10 +42,8 @@ Object				object;
 char				*tex1, *tex2;
 int					tex1Id, tex2Id;
 vector<Triangle4f> 	objTris;
-//rgbaf 				**colorBuffer;
-//double				**zBuffer;
-rgbaf 				colorBuffer[600][600];
-double				zBuffer[600][600];
+rgbaf 				*colorBuffer;
+double				*zBuffer;
 
 // Light
 float 				lightAtt1, lightAtt2, lightAtt3;
@@ -75,6 +73,8 @@ void resetCamera( int nil=0 );
 void updateSettings( int nil=0 );
 void loadModel( int nil=0 );
 
+void reshape1(int w, int h);
+void reshape2(int w, int h);
 
 
 // UTILITY FUNCTIONS ///////////////////////////////////////////////////
@@ -87,19 +87,28 @@ void updateWindows( int nil=0 )
 	glutPostRedisplay();
 }
 
+void reshapeAll(int w, int h) {
+
+	width = w;
+	height = h;
+
+	glutSetWindow(ninjaWindow);
+	glutReshapeWindow(w,h);
+	reshape1(w,h);
+	
+	glutSetWindow(mainWindow);
+	glutReshapeWindow(w,h);
+	reshape2(w,h);
+}
+
 void allocMatrixes()
 {
-/*	int i;
+	free(colorBuffer);
+	free(zBuffer);
 	
-	colorBuffer = (rgbaf**) calloc(height,sizeof(rgbaf*));
-	for(i = 0; i < height; i++) {
-		colorBuffer[i] = (rgbaf*) calloc(width, sizeof(rgbaf));
-	}
+	colorBuffer = (rgbaf*) calloc(height*width,sizeof(rgbaf));
 	
-	zBuffer = (double**) calloc(height,sizeof(double*));
-	for(i = 0; i < height; i++) {
-		zBuffer[i] = (double*) calloc(width, sizeof(double));
-	}*/
+	zBuffer = (double*) calloc(height*width, sizeof(double));
 }
 
 void** allocMatrix(int sizex, int sizey, int typePtrSize, int typeSize)
@@ -296,12 +305,9 @@ void drawOsd()
 	enableLight ? glEnable(GL_LIGHTING) : glDisable(GL_LIGHTING);
 }
 
-void reshape(int w, int h) {
+void reshape1(int w, int h) {
 	
 	glutSetWindow(mainWindow);
-	
-	//width = w;
-	//height = h;
 	
 	glViewport(0, 0, (GLsizei) width, (GLsizei) height);
 	
@@ -393,12 +399,6 @@ void updateViewportMatrix( double lv, double rv, double bv, double tv )
 void reshape2(int w, int h) {
 	
 	glutSetWindow(ninjaWindow);
-	
-	width = w;
-	height = h;
-	
-	//colorBuffer = (rgbaf**) allocMatrix(w,h,sizeof(*rgbaf),sizeof(rgbaf));
-	//zBuffer = (double**) allocMatrix(w,h,sizeof(*rgbaf),sizeof(double));
 	
 	allocMatrixes();
 	
@@ -512,12 +512,17 @@ inline rgbaf middle3Color( rgbaf c1, rgbaf c2, rgbaf c3 )
 
 inline bool testZBuffer( int x, int y, float z )
 {
-	if( zBuffer[x][y] > z ) {
-		zBuffer[x][y] = z;
+	if( zBuffer[x + y*width] > z ) {
+		zBuffer[x + y*width] = z;
 		return true;
 	}
 	else	
 		return false;
+}
+
+inline void writeToColorBuffer( int x, int y, rgbaf color )
+{
+	colorBuffer[y + x*width] = color;	
 }
 	
 
@@ -618,9 +623,9 @@ void rasterizeTriangles2d( vector<Triangle4f> tris )
 												 interpol2Depth(depth1, depth2,
 																(float)(x-limit1)/(limit2-limit1))) ) {
 									if(shadeOpt==0) // Shading = GOURAD
-										colorBuffer[rastery][rasterx] = interpol2Colors(color1, color2, (float)(x-limit1)/(limit2-limit1));
+										writeToColorBuffer( rastery, rasterx, interpol2Colors(color1, color2, (float)(x-limit1)/(limit2-limit1)) );
 									else 			// Shading = FLAT
-										colorBuffer[rastery][rasterx] = middle3Color(a.color,b.color,c.color);
+										writeToColorBuffer( rastery, rasterx, middle3Color(a.color,b.color,c.color) );
 								}
 							}
 					}
@@ -673,9 +678,9 @@ void rasterizeTriangles2d( vector<Triangle4f> tris )
 												 interpol2Depth(depth1, depth2,
 																(float)(x-limit1)/(limit2-limit1))) ) {
 									if(shadeOpt==0) // Shading = GOURAD
-										colorBuffer[rastery][rasterx] = interpol2Colors(color1, color2, (float)(x-limit1)/(limit2-limit1));
+										writeToColorBuffer( rastery, rasterx, interpol2Colors(color1, color2, (float)(x-limit1)/(limit2-limit1)) );
 									else 			// Shading = FLAT
-										colorBuffer[rastery][rasterx] = middle3Color(a.color,b.color,c.color);
+										writeToColorBuffer( rastery, rasterx, middle3Color(a.color,b.color,c.color) );
 								}
 							}
 					}
@@ -722,12 +727,12 @@ void rasterizeTriangles2d( vector<Triangle4f> tris )
 						
 							if( testZBuffer( rasterx, rastery, interpol2Depth(a.pos.z, b.pos.z, (float)k/dy)) ) {
 								if(enableColoredDraw)
-									colorBuffer[rastery][rasterx] = {forceColor[0],forceColor[1],forceColor[2],1};							
+									writeToColorBuffer( rastery, rasterx, {forceColor[0],forceColor[1],forceColor[2],1} );
 								else {
 									if(shadeOpt==0) // Shading = GOURAD
-										colorBuffer[rastery][rasterx] = interpol2Colors(a.color, b.color, (float)k/xlimit);
+										writeToColorBuffer( rastery, rasterx, interpol2Colors(a.color, b.color, (float)k/xlimit) );
 									else 			// Shading = FLAT
-										colorBuffer[rastery][rasterx] = middle3Color(tris[i].v[0].color,tris[i].v[1].color,tris[i].v[2].color);
+										writeToColorBuffer( rastery, rasterx, middle3Color(tris[i].v[0].color,tris[i].v[1].color,tris[i].v[2].color) );
 								}
 							}
 						}
@@ -742,15 +747,13 @@ void rasterizeTriangles2d( vector<Triangle4f> tris )
 						rastery = tris[i].v[k].pos.y;
 						
 						if(enableColoredDraw)
-							colorBuffer[rastery][rasterx] = {forceColor[0],forceColor[1],forceColor[2],1};
+							writeToColorBuffer( rastery, rasterx, {forceColor[0],forceColor[1],forceColor[2],1} );
 						
 						else if(!enableLight)
-							colorBuffer[rastery][rasterx] = {tris[i].v[k].color[0],tris[i].v[k].color[1],tris[i].v[k].color[2],1};
+							writeToColorBuffer( rastery, rasterx, {tris[i].v[k].color[0],tris[i].v[k].color[1],tris[i].v[k].color[2],1} );
 						
 						else {
-							colorBuffer[rastery][rasterx].r = tris[i].v[0].color[0];
-							colorBuffer[rastery][rasterx].g = tris[i].v[0].color[1];
-							colorBuffer[rastery][rasterx].b = tris[i].v[0].color[2];
+							writeToColorBuffer( rastery, rasterx, {tris[i].v[0].color[0], tris[i].v[0].color[1], tris[i].v[0].color[2]} );
 						}
 					}
 				}
@@ -784,14 +787,10 @@ void drawTriangles2d( vector<Triangle4f> tris )
 
 void clearBuffers()
 {
-	for(int i=0; i<width; i++)
-		for(int k=0; k<height; k++) {
-			zBuffer[i][k] = INT_MAX-1;
-			colorBuffer[i][k].r = bgColor[0];
-			colorBuffer[i][k].g = bgColor[1];
-			colorBuffer[i][k].b = bgColor[2];
-			colorBuffer[i][k].a = 1;
-		}
+	for(int i=0; i<width*height; i++) {
+		zBuffer[i] = INT_MAX-1;
+		colorBuffer[i] = {bgColor[0],bgColor[1],bgColor[2],1};
+	}
 }
 
 
@@ -1199,7 +1198,7 @@ void resetCamera( int nil )
 
 void callReshape( int nil )
 {
-	reshape(width,height);
+	reshape1(width,height);
 	reshape2(width,height);
 }
 
@@ -1352,7 +1351,7 @@ int main (int argc, char **argv) {
 	mainWindow = glutCreateWindow ("OpenGL");
 	
     glutDisplayFunc (display);
-    glutReshapeFunc(reshape);
+    glutReshapeFunc(reshapeAll);
     GLUI_Master.set_glutIdleFunc (display);
     
     glutKeyboardFunc(keyboardFunc);
@@ -1368,7 +1367,7 @@ int main (int argc, char **argv) {
 	ninjaWindow = glutCreateWindow ("NinjaGL");
 	
     glutDisplayFunc(display2);
-    glutReshapeFunc(reshape2);
+    glutReshapeFunc(reshapeAll);
     GLUI_Master.set_glutIdleFunc(display2);
     
     glutKeyboardFunc(keyboardFunc);

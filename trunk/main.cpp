@@ -15,6 +15,7 @@
 #include "Object.h"
 #include "constants.h"
 #include "matrix4x4f.h"
+#include "imageloader.h"
 						 
 using namespace std;
 
@@ -32,8 +33,8 @@ struct rgbaf {
 float				bgColor[] = {0.2, 0.2, 0.2};
 long int			frameCounter, frameCounter2, fps, fps2;
 char 				osd[OSD_LINES][256], osd2[OSD_LINES][256];
-#define				width 600
-#define				height 600
+int					width=600;
+int					height=600;
 vector3f			cameraPos, cameraU, cameraV, cameraN;
 
 int					mainWindow, ninjaWindow;
@@ -41,9 +42,10 @@ Object				object;
 char				*tex1, *tex2;
 int					tex1Id, tex2Id;
 vector<Triangle4f> 	objTris;
-//float 				**colorBuffer[4] /*R, G, B, A*/, **zBuffer;
-rgbaf 				colorBuffer[width][height];
-double				zBuffer[width][height];
+//rgbaf 				**colorBuffer;
+//double				**zBuffer;
+rgbaf 				colorBuffer[600][600];
+double				zBuffer[600][600];
 
 // Light
 float 				lightAtt1, lightAtt2, lightAtt3;
@@ -57,8 +59,9 @@ static int	    	left_click=GLUT_UP, right_click=GLUT_UP, middle_click=GLUT_UP;
 static bool     	heldCtrl=false, heldShift=false;
 
 // GUI controlled
+GLUI 				*materialWindow;
 float				fovy=60, fovx=60, clipNear=10, clipFar=3000;
-int					drawOpt=1, cameraMoveOpt, orientationOpt, shadeOpt=1;
+int					drawOpt=0, cameraMoveOpt, orientationOpt, shadeOpt=0, texOpt=0;
 int					enableLight0=1, enableRotLight=1, enableCulling=1, 
 					enableDrawNormals=0, enableDrawBoundingBox=0, enableColoredDraw=0,
 					enableLight=1;
@@ -84,11 +87,26 @@ void updateWindows( int nil=0 )
 	glutPostRedisplay();
 }
 
-void** allocMatrix(int sizex, int sizey, int typeSize)
+void allocMatrixes()
+{
+/*	int i;
+	
+	colorBuffer = (rgbaf**) calloc(height,sizeof(rgbaf*));
+	for(i = 0; i < height; i++) {
+		colorBuffer[i] = (rgbaf*) calloc(width, sizeof(rgbaf));
+	}
+	
+	zBuffer = (double**) calloc(height,sizeof(double*));
+	for(i = 0; i < height; i++) {
+		zBuffer[i] = (double*) calloc(width, sizeof(double));
+	}*/
+}
+
+void** allocMatrix(int sizex, int sizey, int typePtrSize, int typeSize)
 {
         void** matrix;
         
-        matrix = (void**) calloc(sizex, 4);
+        matrix = (void**) calloc(sizex, typePtrSize);
         for(int i=0; i<sizex; i++)
                 matrix[i] = (void*) calloc(sizey, typeSize);
                 
@@ -163,32 +181,34 @@ char * loadJpg(const char* Name){
         //int Depht = 32;
 }
 
-GLuint loadTexture(char* pixels, int w, int h) {
+GLuint loadTexture(Image* im) {
 // Makes the image into a texture, and returns the id of the texture
 
         GLuint textureId;
         
         glutSetWindow(mainWindow);
-        glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+        //glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
         glGenTextures(1, &textureId); //Make room for our texture
         glBindTexture(GL_TEXTURE_2D, textureId); //Tell OpenGL which texture to edit
+        // select modulate to mix texture with color for shading
+		glTexEnvf( GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE );
+        
+        // the texture wraps over at the edges (repeat)
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-
+        			
         //Map the image to the texture
         glTexImage2D(GL_TEXTURE_2D,                //Always GL_TEXTURE_2D
                                  0,                            //0 for now
                                  GL_RGB,                       //Format OpenGL uses for image
-                                 w, h,  //Width and height
+                                 im->width, im->height,  //Width and height
                                  0,                            //The border of the image
                                  GL_RGB, //GL_RGB, because pixels are stored in RGB format
                                  GL_UNSIGNED_BYTE, //GL_UNSIGNED_BYTE, because pixels are stored
                                                    //as unsigned numbers
-                                 pixels);          //The actual pixel data
-                                 
-        //gluBuild2DMipmaps(GL_TEXTURE_2D, GL_RGB, <tex_width>, <tex_height>, GL_RGB, GL_UNSIGNED_BYTE, <texture>);
-		glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
+                                 im->pixels);          //The actual pixel data
+        
+        gluBuild2DMipmaps( GL_TEXTURE_2D, GL_RGB, im->width, im->height, GL_RGB, GL_UNSIGNED_BYTE, im->pixels );
         
         return textureId; //Returns the id of the texture
 }
@@ -206,10 +226,24 @@ void drawObjects()
 		case 1:	glPolygonMode( GL_FRONT_AND_BACK, GL_LINE ); break;
 		case 2:	glPolygonMode( GL_FRONT_AND_BACK, GL_POINT ); break;
 	}
+	
 	if(object.hasTex) {
 			glutSetWindow(mainWindow);
-			glBindTexture(GL_TEXTURE_2D, tex1Id);
+			glBindTexture(GL_TEXTURE_2D, tex2Id);
+			
+			switch(texOpt) {
+				case 0:
+					glTexParameterf( GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST );
+					break;
+				case 1:
+					glTexParameterf( GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR );
+					break;
+				case 2:
+					glTexParameterf( GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR );
+					break;
+			}			
 		}
+		
 	if(enableColoredDraw) {
 		for(int i=0; i<3; i++)
 			object.forceColor[i] = forceColor[i];
@@ -217,8 +251,10 @@ void drawObjects()
 	}
 	else
 		object.draw(false);
+		
 	if(enableDrawBoundingBox)
 		object.drawBoundingBox();
+		
 	if(enableDrawNormals)
 		object.drawNormals(20);
 }
@@ -355,11 +391,13 @@ void reshape2(int w, int h) {
 	
 	glutSetWindow(ninjaWindow);
 	
-	//width = w;
-	//height = h;
+	width = w;
+	height = h;
 	
-	//colorBuffer = (rgbaf**) allocMatrix(w,h,sizeof(rgbaf));
-	//zBuffer = (float**) allocMatrix(w,h,sizeof(float));
+	//colorBuffer = (rgbaf**) allocMatrix(w,h,sizeof(*rgbaf),sizeof(rgbaf));
+	//zBuffer = (double**) allocMatrix(w,h,sizeof(*rgbaf),sizeof(double));
+	
+	allocMatrixes();
 	
 	glViewport(0, 0, (GLsizei) w, (GLsizei) h);
 	
@@ -382,7 +420,7 @@ void updateFrameBuffer()
 
 inline void calculateColors( Vertex4f *v )
 {
-	float phong, att, d;
+	double phong, att, d;
 	Material mat = object.material;
 	vector4f n = v->normal;
 	//n.normalize();
@@ -394,10 +432,11 @@ inline void calculateColors( Vertex4f *v )
 		if(enableLight0) {
 			static vector4f l, r;
 			static vector3f view;
-			static float dotDif, dotSpec;
+			static double dotDif, dotSpec;
 			
 			// ambient
-			phong += light0.ambient[c] * mat.ambient[c];
+			//should use 'mat.ambient[c]', but OpenGL seems to use the diffuse component
+			phong += light0.ambient[c] * (enableColoredDraw? forceColor[c] : mat.diffuse[c]);
 
 			// attenuation calc
 			d = distanceV(light0Pos, v->pos);
@@ -410,14 +449,14 @@ inline void calculateColors( Vertex4f *v )
 			l.normalize();
 			dotDif = dotProduct( n, l );
 			if(dotDif>0) {
-				phong += att * light0.diffuse[c] * mat.diffuse[c] * dotDif;
+				phong += att * dotDif * light0.diffuse[c] * (enableColoredDraw? forceColor[c] : mat.diffuse[c]);
 				
 				// specular
 				r = 2*dotProduct(n,l)*n - l;
 				r.normalize();
 				view = cameraPos - v->pos.toVector3f();
 				view.normalize();
-				dotSpec = 2.2*dotProduct( view, r.toVector3f() );
+				dotSpec = dotProduct( view, r.toVector3f() ) * 2.2; //gambis
 				if(dotSpec>0)
 					phong += att * light0.specular[c] * mat.specular[c] * pow(dotSpec, mat.shininess);
 			}
@@ -502,7 +541,12 @@ void rasterizeTriangles2d( vector<Triangle4f> tris )
 					static rgbaf color1, color2;
 					static float depth1, depth2;
 					
-					// first, choose right vertices
+					// First, choose right vertices
+					// We take that:
+					//   1. B is the upmost vertice
+					//   2. from the rest, A is the leftmost and B is the rightmost
+					//
+					// first, find B
 					vector<Vertex4f> verts;
 					for(int k=0; k<3; k++)
 							verts.push_back(tris[i].v[k]);
@@ -512,7 +556,7 @@ void rasterizeTriangles2d( vector<Triangle4f> tris )
 									sel = k;
 					b = verts[sel];
 					verts.erase(verts.begin()+sel);
-					// choose a and c
+					// choose A and C
 					if(verts[0].pos.x < verts[1].pos.x) {
 							a = verts[0];
 							c = verts[1];
@@ -522,7 +566,7 @@ void rasterizeTriangles2d( vector<Triangle4f> tris )
 							c = verts[0];
 					}
 					
-					//set up variations
+					//calculate variations
 					dx0 = b.pos.x - a.pos.x;
 					dx1 = c.pos.x - b.pos.x;
 					dx2 = a.pos.x - c.pos.x;
@@ -531,7 +575,7 @@ void rasterizeTriangles2d( vector<Triangle4f> tris )
 					dy1 = b.pos.y - c.pos.y;
 					dy2 = a.pos.y - c.pos.y;
 					
-					// Rasterize Phase 1 - top part
+					// Rasterize Phase 1 - top part of the triangle
 					if(dy2>0) //a.y < c.y
 							dy = dy0;
 					else      //a.y < c.y
@@ -547,7 +591,7 @@ void rasterizeTriangles2d( vector<Triangle4f> tris )
 							x2 = b.pos.x + k*incx1;
 							y--;
 							
-							if(shadeOpt==0) { //gourad
+							if(shadeOpt==0) { // Shading = GOURAD
 								color1 = interpol2Colors(b.color, a.color, (float)k/dy);
 								color2 = interpol2Colors(b.color, c.color, (float)k/dy);
 							}
@@ -567,10 +611,12 @@ void rasterizeTriangles2d( vector<Triangle4f> tris )
 								rasterx = (int)round(x);
 								rastery = (int)round(y);
 								
-								if( testZBuffer( rasterx, rastery, interpol2Depth(depth1, depth2, (float)(x-limit1)/(limit2-limit1))) ) {
-									if(shadeOpt==0) //gourad
+								if( testZBuffer( rasterx, rastery,
+												 interpol2Depth(depth1, depth2,
+																(float)(x-limit1)/(limit2-limit1))) ) {
+									if(shadeOpt==0) // Shading = GOURAD
 										colorBuffer[rastery][rasterx] = interpol2Colors(color1, color2, (float)(x-limit1)/(limit2-limit1));
-									else
+									else 			// Shading = FLAT
 										colorBuffer[rastery][rasterx] = middle3Color(a.color,b.color,c.color);
 								}
 							}
@@ -600,7 +646,7 @@ void rasterizeTriangles2d( vector<Triangle4f> tris )
 							x2 = xorigin + k*newincxB;
 							y++;
 
-							if(shadeOpt==0) { //gourad
+							if(shadeOpt==0) { // Shading = GOURAD
 								color1 = interpol2Colors(bottom.color, left.color, (float)k/dy);
 								color2 = interpol2Colors(bottom.color, right.color, (float)k/dy);
 							}
@@ -620,10 +666,12 @@ void rasterizeTriangles2d( vector<Triangle4f> tris )
 								rasterx = (int)round(x);
 								rastery = (int)round(y);
 								
-								if( testZBuffer( rasterx, rastery, interpol2Depth(depth1, depth2, (float)(x-limit1)/(limit2-limit1))) ) {
-									if(shadeOpt==0) //gourad
+								if( testZBuffer( rasterx, rastery,
+												 interpol2Depth(depth1, depth2,
+																(float)(x-limit1)/(limit2-limit1))) ) {
+									if(shadeOpt==0) // Shading = GOURAD
 										colorBuffer[rastery][rasterx] = interpol2Colors(color1, color2, (float)(x-limit1)/(limit2-limit1));
-									else
+									else 			// Shading = FLAT
 										colorBuffer[rastery][rasterx] = middle3Color(a.color,b.color,c.color);
 								}
 							}
@@ -635,9 +683,9 @@ void rasterizeTriangles2d( vector<Triangle4f> tris )
 				break;
 			
 			case 1:
+				// GL_LINE
 				{
 					int iter[] = { 0,1, 1,2, 2,0 };
-					// GL_LINE
 					// this is a kinda smart bresenham
 					for(int v=0; v<6; v+=2) {
 						static float dx, dy, incx, incy, xlimit;
@@ -673,9 +721,9 @@ void rasterizeTriangles2d( vector<Triangle4f> tris )
 								if(enableColoredDraw)
 									colorBuffer[rastery][rasterx] = {forceColor[0],forceColor[1],forceColor[2],1};							
 								else {
-									if(shadeOpt==0) //gourad
+									if(shadeOpt==0) // Shading = GOURAD
 										colorBuffer[rastery][rasterx] = interpol2Colors(a.color, b.color, (float)k/xlimit);
-									else
+									else 			// Shading = FLAT
 										colorBuffer[rastery][rasterx] = middle3Color(tris[i].v[0].color,tris[i].v[1].color,tris[i].v[2].color);
 								}
 							}
@@ -855,11 +903,19 @@ void initWorld()
 {
 	updateSettings();
 	
-	tex1 = loadJpg("data/mandrill_256.jpg");
-	tex2 = loadJpg("data/checker_8x8.jpg");
+	{
+		Image *im;
+		im = loadBMP("data/mandrill_256.bmp");
+		tex1Id = loadTexture(im);
+		delete im;
+	}
 	
-	tex1Id = loadTexture(tex1,256,256);
-	tex2Id = loadTexture(tex2,256,256);
+	{
+		Image *im;
+		im = loadBMP("data/checker_8x8.bmp");
+		tex2Id = loadTexture(im);
+		delete im;
+	}
 	
 	loadModel();
 }
@@ -965,12 +1021,6 @@ void initGL()
     glHint(GL_PERSPECTIVE_CORRECTION_HINT, GL_NICEST);
     glEnable(GL_DEPTH_TEST);
     glEnable(GL_TEXTURE_2D);
-    
-	tex1 = loadJpg("data/mandrill_256.jpg");
-	tex2 = loadJpg("data/checker_8x8.jpg");
-	
-	tex1Id = loadTexture(tex1,256,256);
-	tex2Id = loadTexture(tex2,256,256);
 }
 
 void keyboardFunc (unsigned char key, int x, int y) {
@@ -1182,9 +1232,15 @@ void resetMaterialToDefault( int nil=0 )
 	updateWindows();
 }
 
+void closeMaterialWindow( int nil=0 )
+{
+	materialWindow->close();
+}
+
 void createMaterialGuiWindow( int nil=0 )
 {
 	GLUI *glui = GLUI_Master.create_glui("Material");
+	materialWindow = glui;
 
 	GLUI_Panel *p1 = glui->add_panel("Ambient");
 		GLUI_Spinner *p1SpinR = glui->add_spinner_to_panel( p1, "R:", GLUI_SPINNER_FLOAT, &object.material.ambient[0], 0, updateWindows );
@@ -1211,16 +1267,15 @@ void createMaterialGuiWindow( int nil=0 )
 			p3SpinB->set_float_limits( 0., 1., GLUI_LIMIT_CLAMP );	
 	
 	GLUI_Panel *p4 = glui->add_panel("Shininess");
-		GLUI_Spinner *p4Spin = glui->add_spinner_to_panel( p4, "Value: ", GLUI_SPINNER_FLOAT, &object.material.shininess, 0, updateWindows);
-			//p4Spin->set_float_limits( 0., 1., GLUI_LIMIT_CLAMP );	
+		glui->add_spinner_to_panel( p4, "Value: ", GLUI_SPINNER_FLOAT, &object.material.shininess, 0, updateWindows);
 	
 	glui->add_button( "Reset to default", 0, resetMaterialToDefault );
-	//glui->add_button( "OK", 0, glui->close );
+	glui->add_button( "OK", 0, closeMaterialWindow );
 }
 
 void createGuiWindow()
 {
-	GLUI *glui = GLUI_Master.create_glui("",0,WINDOWSX+width+10,WINDOWSY);
+	GLUI *glui = GLUI_Master.create_glui("",0,WINDOWSX+width+10,WINDOWSY-30);
 
 	GLUI_Panel *lp = glui->add_panel("World");
 		glui->add_checkbox_to_panel( lp, "Enable Lighting", &enableLight, 0, updateSettings );
@@ -1241,6 +1296,10 @@ void createGuiWindow()
 			models->add_item( 0, "Filled");
 			models->add_item( 1, "Wireframe");
 			models->add_item( 2, "Vertex");
+		GLUI_Listbox *texfilter = glui->add_listbox_to_panel(mp,"Texture Filter: ", &texOpt, 0, updateSettings);
+			texfilter->add_item( 0, "Nearest Neighbors");
+			texfilter->add_item( 1, "Bilinear");
+			texfilter->add_item( 2, "Trilinear");
 		glui->add_checkbox_to_panel( mp, "Enable Backface Culling", &enableCulling, 0, updateSettings );
 		glui->add_checkbox_to_panel( mp, "Draw Normals", &enableDrawNormals );
 		glui->add_checkbox_to_panel( mp, "Draw Bounding Box", &enableDrawBoundingBox );
@@ -1281,6 +1340,8 @@ int main (int argc, char **argv) {
 	else
 		sprintf(fileName,"data/cow.in");
 		
+	allocMatrixes();
+		
     // OpenGL Window
     glutInit (&argc, argv);
     glutInitDisplayMode ( GLUT_DOUBLE | GLUT_RGB | GLUT_DEPTH );
@@ -1301,7 +1362,7 @@ int main (int argc, char **argv) {
 	glutTimerFunc(1000/*1sec*/, updateFPS, 0);
 	
 	// Close2GL Window
-	glutInitWindowPosition(WINDOWSX+width+220,WINDOWSY);
+	glutInitWindowPosition(WINDOWSX+width+260,WINDOWSY);
 	ninjaWindow = glutCreateWindow ("NinjaGL");
 	
     glutDisplayFunc(display2);

@@ -120,7 +120,7 @@ int Object::readFromFile( string filename )
 				fscanf(fp, "v0 %f %f %f %f %f %f %d %f %f\n",
 							&(tris[i].v[k].pos.x), &(tris[i].v[k].pos.y), &(tris[i].v[k].pos.z),
 							&(tris[i].v[k].normal.x), &(tris[i].v[k].normal.y), &(tris[i].v[k].normal.z), //ignored
-							&(materialIndex), &(tris[i].s), &(tris[i].t));
+							&(materialIndex), &(tris[i].v[k].s), &(tris[i].v[k].t));
 			else
 				fscanf(fp, "v0 %f %f %f %f %f %f %d\n",
 							&(tris[i].v[k].pos.x), &(tris[i].v[k].pos.y), &(tris[i].v[k].pos.z),
@@ -140,7 +140,7 @@ int Object::readFromFile( string filename )
 				fscanf(fp, "v1 %f %f %f %f %f %f %d %f %f\n",
 							&(tris[i].v[k].pos.x), &(tris[i].v[k].pos.y), &(tris[i].v[k].pos.z),
 							&(tris[i].v[k].normal.x), &(tris[i].v[k].normal.y), &(tris[i].v[k].normal.z), //ignored
-							&(materialIndex), &(tris[i].s), &(tris[i].t));
+							&(materialIndex), &(tris[i].v[k].s), &(tris[i].v[k].t));
 			else
 				fscanf(fp, "v1 %f %f %f %f %f %f %d\n",
 							&(tris[i].v[k].pos.x), &(tris[i].v[k].pos.y), &(tris[i].v[k].pos.z),
@@ -160,7 +160,7 @@ int Object::readFromFile( string filename )
 				fscanf(fp, "v2 %f %f %f %f %f %f %d %f %f\n",
 							&(tris[i].v[k].pos.x), &(tris[i].v[k].pos.y), &(tris[i].v[k].pos.z),
 							&(tris[i].v[k].normal.x), &(tris[i].v[k].normal.y), &(tris[i].v[k].normal.z), //ignored
-							&(materialIndex), &(tris[i].s), &(tris[i].t));
+							&(materialIndex), &(tris[i].v[k].s), &(tris[i].v[k].t));
 			else
 				fscanf(fp, "v2 %f %f %f %f %f %f %d\n",
 							&(tris[i].v[k].pos.x), &(tris[i].v[k].pos.y), &(tris[i].v[k].pos.z),
@@ -223,11 +223,11 @@ void Object::draw( bool isColored ) const
 		for(unsigned int i=0; i<tris.size(); i++) {
 			for(int k=0; k<3; k++) {
 				if(!isColored)
-					glColor3f( tris[i].v[k].color[0],
-								tris[i].v[k].color[1],
-								tris[i].v[k].color[2]); 
+					glColor3f( material.diffuse[0],
+								material.diffuse[1],
+								material.diffuse[2]); 
 				if(hasTex)
-					glTexCoord2f(tris[i].s, tris[i].t);
+					glTexCoord2f(tris[i].v[k].s, tris[i].v[k].t);
 				glNormal3f(tris[i].v[k].normal.x, tris[i].v[k].normal.y, tris[i].v[k].normal.z); 
 				glVertex3f(tris[i].v[k].pos.x, tris[i].v[k].pos.y, tris[i].v[k].pos.z);
 			}

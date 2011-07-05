@@ -3,7 +3,7 @@ CC = g++
 FLAGS = -Wall -std=c++0x
 
 OBJDIR = obj
-OBJNAMES = Object.o Material.o vector3f.o vector4f.o
+OBJNAMES = Object.o Material.o vector3f.o vector4f.o imageloader.o
 OBJS = $(addprefix $(OBJDIR)/,$(OBJNAMES))
 
 LIBS = -lGL -lglut -lGLU -lglui -ljpeg

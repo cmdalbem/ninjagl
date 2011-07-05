@@ -229,6 +229,7 @@ void drawObjects()
 	
 	if(object.hasTex) {
 			glutSetWindow(mainWindow);
+			glEnable(GL_TEXTURE_2D);
 			glBindTexture(GL_TEXTURE_2D, tex2Id);
 			
 			switch(texOpt) {
@@ -242,7 +243,7 @@ void drawObjects()
 					glTexParameterf( GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR );
 					break;
 			}			
-		}
+	}
 		
 	if(enableColoredDraw) {
 		for(int i=0; i<3; i++)
@@ -257,6 +258,8 @@ void drawObjects()
 		
 	if(enableDrawNormals)
 		object.drawNormals(20);
+		
+	glDisable(GL_TEXTURE_2D);
 }
 
 void lights()
@@ -1020,7 +1023,6 @@ void initGL()
     glEnable(GL_COLOR_MATERIAL);
     glHint(GL_PERSPECTIVE_CORRECTION_HINT, GL_NICEST);
     glEnable(GL_DEPTH_TEST);
-    glEnable(GL_TEXTURE_2D);
 }
 
 void keyboardFunc (unsigned char key, int x, int y) {

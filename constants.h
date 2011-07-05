@@ -21,18 +21,19 @@ struct Vertex3f
 {
 	vector3f pos, normal;
 	float color[3];
+	float s, t;
 };
 struct Triangle3f
 {
 	Vertex3f v[3];
 	vector3f normal;
-	float s, t;
 };
 
 struct Vertex4f
 {
 	vector4f pos, normal;
 	float color[3];
+	float s, t;
 };
 struct Triangle4f
 {
